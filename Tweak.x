@@ -13,7 +13,6 @@ static NSString *GetStealthEngineJS(void) {
         "  'use strict';"
         "  if (window.__wk18_loaded) return;"
         "  Object.defineProperty(window, '__wk18_loaded', { value: true, enumerable: false, configurable: false, writable: false });"
-        // 1. 原生签名隐身保护器 ([native code])
         "  const nativeMap = new WeakMap();"
         "  const origToString = Function.prototype.toString;"
         "  const proxiedToString = new Proxy(origToString, {"
@@ -29,7 +28,6 @@ static NSString *GetStealthEngineJS(void) {
         "    nativeMap.set(fn, `function ${prop}() { [native code] }`);"
         "    Object.defineProperty(obj, prop, { value: fn, enumerable: false, configurable: true, writable: true });"
         "  }"
-        // 2. 补全现代 JS 核心 API 防止前端报错中断渲染
         "  defineNative(Object, 'hasOwn', function hasOwn(o, p) {"
         "    if (o == null) throw new TypeError('Cannot convert undefined or null to object');"
         "    return Object.prototype.hasOwnProperty.call(Object(o), p);"
@@ -41,7 +39,7 @@ static NSString *GetStealthEngineJS(void) {
         "  });"
         "  defineNative(Map, 'groupBy', function groupBy(items, cb) {"
         "    const res = new Map(); let i = 0;"
-        "    for (const item of items) { const k = cb(item, i++); const a = res.get(key); if (a) a.push(item); else res.set(k, [item]); }"
+        "    for (const item of items) { const k = cb(item, i++); const a = res.get(k); if (a) a.push(item); else res.set(k, [item]); }"
         "    return res;"
         "  });"
         "  defineNative(Promise, 'withResolvers', function withResolvers() {"
@@ -62,7 +60,6 @@ static NSString *GetStealthEngineJS(void) {
         "    const len = this.length >>> 0; let k = Math.trunc(n) || 0; if (k < 0) k += len;"
         "    return (k < 0 || k >= len) ? undefined : this[k];"
         "  });"
-        // 3. 轻量级现代 CSS 兼容修复（剥离 @layer 壳 + 扁平化 & 嵌套，仅在插入 style 时执行一次，不卡顿）
         "  function upgradeModernCSS(css) {"
         "    if (!css) return css;"
         "    let out = css;"
@@ -96,7 +93,6 @@ static NSString *GetStealthEngineJS(void) {
         "    }"
         "  });"
         "  observer.observe(document.documentElement, { childList: true, subtree: true });"
-        // 4. 修复 PayPal 等站点的英雄区主容器隐身与弹窗层被遮挡问题
         "  window.addEventListener('DOMContentLoaded', () => {"
         "    const fix = document.createElement('style');"
         "    fix.textContent = 'main, [role=\"main\"], section { opacity: 1 !important; visibility: visible !important; } dialog[open], [role=\"dialog\"], [aria-modal=\"true\"] { display: block !important; opacity: 1 !important; visibility: visible !important; z-index: 2147483647 !important; }';"
