@@ -13,6 +13,8 @@ static NSString *GetStealthEngineJS(void) {
         "  'use strict';"
         "  if (window.__wk18_loaded) return;"
         "  Object.defineProperty(window, '__wk18_loaded', { value: true, enumerable: false, configurable: false, writable: false });"
+
+        // 1. 原生函数签名隐身保护器 ([native code])
         "  const nativeMap = new WeakMap();"
         "  const origToString = Function.prototype.toString;"
         "  const proxiedToString = new Proxy(origToString, {"
@@ -23,11 +25,26 @@ static NSString *GetStealthEngineJS(void) {
         "  });"
         "  nativeMap.set(proxiedToString, 'function toString() { [native code] }');"
         "  Object.defineProperty(Function.prototype, 'toString', { value: proxiedToString, enumerable: false, configurable: true, writable: true });"
+
         "  function defineNative(obj, prop, fn) {"
         "    if (!obj || prop in obj) return;"
         "    nativeMap.set(fn, `function ${prop}() { [native code] }`);"
         "    Object.defineProperty(obj, prop, { value: fn, enumerable: false, configurable: true, writable: true });"
         "  }"
+
+        // 2. Navigator 指纹一致性对齐（防止 JS 层与 HTTP Header UA 不一致触发风控）
+        "  const uaVal = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1';"
+        "  const appVerVal = '5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1';"
+        "  const getUA = function userAgent() { return uaVal; };"
+        "  const getAppVer = function appVersion() { return appVerVal; };"
+        "  nativeMap.set(getUA, 'function get userAgent() { [native code] }');"
+        "  nativeMap.set(getAppVer, 'function get appVersion() { [native code] }');"
+        "  try {"
+        "    Object.defineProperty(Navigator.prototype, 'userAgent', { get: getUA, enumerable: true, configurable: true });"
+        "    Object.defineProperty(Navigator.prototype, 'appVersion', { get: getAppVer, enumerable: true, configurable: true });"
+        "  } catch (_) {}"
+
+        // 3. 补全 iOS 17 / 18 现代 JS 核心 API（消除前端报错白屏）
         "  defineNative(Object, 'hasOwn', function hasOwn(o, p) {"
         "    if (o == null) throw new TypeError('Cannot convert undefined or null to object');"
         "    return Object.prototype.hasOwnProperty.call(Object(o), p);"
@@ -60,9 +77,14 @@ static NSString *GetStealthEngineJS(void) {
         "    const len = this.length >>> 0; let k = Math.trunc(n) || 0; if (k < 0) k += len;"
         "    return (k < 0 || k >= len) ? undefined : this[k];"
         "  });"
+
+        // 4. 现代 CSS 实时翻译（修复 PayPal 100dvh 高度坍塌 + @layer + & 嵌套）
         "  function upgradeModernCSS(css) {"
         "    if (!css) return css;"
         "    let out = css;"
+        "    if (out.indexOf('dvh') !== -1 || out.indexOf('svh') !== -1 || out.indexOf('lvh') !== -1) {"
+        "      out = out.replace(/(\\d+(?:\\.\\d+)?)(?:dvh|svh|lvh)/g, '$1vh');"
+        "    }"
         "    if (out.indexOf('@layer') !== -1) {"
         "      out = out.replace(/@layer\\s+[^{;]+\\{/g, '@media all {');"
         "    }"
@@ -79,24 +101,29 @@ static NSString *GetStealthEngineJS(void) {
         "    }"
         "    return out;"
         "  }"
+
         "  const observer = new MutationObserver((muts) => {"
         "    for (let i = 0; i < muts.length; i++) {"
         "      const added = muts[i].addedNodes;"
         "      for (let j = 0; j < added.length; j++) {"
         "        const node = added[j];"
         "        if (node.nodeName === 'STYLE' && node.textContent) {"
-        "          if (node.textContent.indexOf('&') !== -1 || node.textContent.indexOf('@layer') !== -1) {"
-        "            node.textContent = upgradeModernCSS(node.textContent);"
+        "          const txt = node.textContent;"
+        "          if (txt.indexOf('&') !== -1 || txt.indexOf('@layer') !== -1 || txt.indexOf('vh') !== -1) {"
+        "            node.textContent = upgradeModernCSS(txt);"
         "          }"
         "        }"
         "      }"
         "    }"
         "  });"
         "  observer.observe(document.documentElement, { childList: true, subtree: true });"
+
+        // 5. 唤醒 PayPal 等站点的隐藏英雄区与 Help 抽屉弹窗层
         "  window.addEventListener('DOMContentLoaded', () => {"
         "    const fix = document.createElement('style');"
-        "    fix.textContent = 'main, [role=\"main\"], section { opacity: 1 !important; visibility: visible !important; } dialog[open], [role=\"dialog\"], [aria-modal=\"true\"] { display: block !important; opacity: 1 !important; visibility: visible !important; z-index: 2147483647 !important; }';"
+        "    fix.textContent = 'main, [role=\"main\"], section, [data-testid*=\"hero\"], [class*=\"hero\"] { opacity: 1 !important; visibility: visible !important; transform: none !important; } dialog[open], [role=\"dialog\"], [aria-modal=\"true\"], [class*=\"modal\"], [class*=\"drawer\"] { opacity: 1 !important; visibility: visible !important; }';"
         "    (document.head || document.documentElement).appendChild(fix);"
+        "    window.dispatchEvent(new Event('resize'));"
         "  }, { once: true });"
         "})();";
     });
