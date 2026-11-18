@@ -64,7 +64,7 @@ static NSString *S18SBuildBootstrap(void) {
                 // must fail closed instead of silently shipping an incomplete
                 // compatibility layer to every page/frame.
                 if (part.length == 0) {
-                    [combined setString:@""];
+                    [combined setString:S18SString("")];
                     break;
                 }
                 if (combined.length > 0 && separator) [combined appendString:separator];
