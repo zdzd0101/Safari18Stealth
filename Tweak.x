@@ -1,116 +1,120 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
+#import <objc/runtime.h>
+#import <os/lock.h>
+#import <roothide.h>
+#include <stddef.h>
 
-static NSString *GetStealthEngineJS(void) {
-    static NSString *js;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        js =
-        @"(() => {"
-        @"'use strict';"
-        @"if (window.__Safari18StealthFinal321) return;"
-        @"Object.defineProperty(window,'__Safari18StealthFinal321',{value:true,configurable:false});"
+static const char S18SVersion[] = "3.3 FINAL";
+static const void *S18SInjectedKey = &S18SInjectedKey;
+static os_unfair_lock S18SBootstrapLock = OS_UNFAIR_LOCK_INIT;
+static NSString *S18SCachedBootstrap = nil;
+static BOOL S18SBootstrapAttempted = NO;
 
-        // Additive-only compatibility: never replace APIs that WebKit already provides.
-        @"const install=(obj,key,fn)=>{"
-          @"if(!obj||key in obj)return;"
-          @"try{Object.defineProperty(obj,key,{value:fn,configurable:true,writable:true,enumerable:false})}catch(_){}"
-        @"};"
-        @"install(Object,'hasOwn',function hasOwn(o,p){"
-          @"if(o==null)throw new TypeError('Cannot convert undefined or null to object');"
-          @"return Object.prototype.hasOwnProperty.call(Object(o),p)"
-        @"});"
-        @"install(Object,'groupBy',function groupBy(items,cb){"
-          @"const out=Object.create(null);let i=0;"
-          @"for(const item of items){const k=cb(item,i++);(out[k]||(out[k]=[])).push(item)}"
-          @"return out"
-        @"});"
-        @"install(Map,'groupBy',function groupBy(items,cb){"
-          @"const out=new Map();let i=0;"
-          @"for(const item of items){const k=cb(item,i++),a=out.get(k);if(a)a.push(item);else out.set(k,[item])}"
-          @"return out"
-        @"});"
-        @"install(Promise,'withResolvers',function withResolvers(){"
-          @"let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j});return{promise,resolve,reject}"
-        @"});"
-        @"install(URL,'canParse',function canParse(u,b){try{new URL(u,b);return true}catch(_){return false}});"
-        @"install(Array.prototype,'at',function at(n){const a=this,l=a.length;let i=Math.trunc(n)||0;if(i<0)i+=l;return i<0||i>=l?undefined:a[i]});"
-        @"install(Array.prototype,'toSorted',function toSorted(fn){return Array.from(this).sort(fn)});"
-        @"install(Array.prototype,'toReversed',function toReversed(){return Array.from(this).reverse()});"
-        @"install(Array.prototype,'toSpliced',function toSpliced(s,d,...items){const a=Array.from(this);a.splice(s,d,...items);return a});"
-        @"install(Array.prototype,'with',function withFn(i,v){const a=Array.from(this),n=i<0?a.length+i:i;if(n<0||n>=a.length)throw new RangeError('Invalid index');a[n]=v;return a});"
-
-        // Preserve the device/browser locale; do not invent a region-language combination.
-        // Native Safari/WebKit supplies the authoritative locale signals.
-        // Native iOS 18 WebKit already supports modern viewport units. Do not rewrite CSS.
-        // Only expose a stable viewport value for pages that explicitly need it.
-        @"const updateViewport=()=>{"
-          @"try{"
-            @"const h=window.visualViewport?window.visualViewport.height:window.innerHeight;"
-            @"document.documentElement.style.setProperty('--s18-viewport-height',h+'px');"
-          @"}catch(_){}"
-        @"};"
-        @"if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',updateViewport,{once:true});else updateViewport();"
-        @"window.addEventListener('resize',updateViewport,{passive:true});"
-        @"if(window.visualViewport)window.visualViewport.addEventListener('resize',updateViewport,{passive:true});"
-
-        // Recover only semantically-open dialogs that are accidentally inert/hidden.
-        @"const recoverOpenUI=()=>{"
-          @"try{"
-            @"for(const el of document.querySelectorAll('dialog[open],[role=dialog][aria-modal=\"true\"])){"
-              @"if(el.hasAttribute('inert'))el.removeAttribute('inert');"
-              @"const cs=getComputedStyle(el);"
-              @"if(cs.visibility==='hidden'&&el.getAttribute('aria-hidden')!=='true')el.style.setProperty('visibility','visible','important');"
-              @"if(cs.pointerEvents==='none')el.style.setProperty('pointer-events','auto','important');"
-            @"}"
-          @"}catch(_){}"
-        @"};"
-        @"if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',recoverOpenUI,{once:true});else recoverOpenUI();"
-        @"try{"
-          @"let timer=0;"
-          @"new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(recoverOpenUI,120)}).observe(document.documentElement||document,{subtree:true,childList:true,attributes:true,attributeFilter:['open','aria-modal','aria-hidden','inert']});"
-        @"}catch(_){}"
-
-        @"})();";
-    });
-    return js;
+static NSString *S18SString(const char *value) {
+    if (value == NULL) return nil;
+    return [[NSString alloc] initWithUTF8String:value];
 }
-static void PR_InstallScript(WKUserContentController *ucc) {
-    if (!ucc) return;
-    for (WKUserScript *script in ucc.userScripts) {
-        if ([script.source containsString:@"__Safari18StealthFinal321"]) return;
+
+static NSString *S18SReadResource(const char *resourceName) {
+    NSString *name = S18SString(resourceName);
+    NSString *prefix = S18SString("/Library/Application Support/Safari18Stealth/");
+    NSString *suffix = S18SString(".js");
+    if (!name || !prefix || !suffix) return nil;
+
+    NSString *virtualPath = [[prefix stringByAppendingString:name] stringByAppendingString:suffix];
+    NSString *path = jbroot(virtualPath);
+    if (path.length == 0) return nil;
+
+    NSError *error = nil;
+    NSString *source = [NSString stringWithContentsOfFile:path
+                                                  encoding:NSUTF8StringEncoding
+                                                     error:&error];
+    if (!source && error) {
+        NSString *format = S18SString("[Safari18Stealth] resource %@ unavailable: %@");
+        if (format) NSLog(format, name, error.localizedDescription ?: S18SString("unknown error"));
     }
-    WKUserScript *script = [[WKUserScript alloc]
-        initWithSource:GetStealthEngineJS()
-        injectionTime:WKUserScriptInjectionTimeAtDocumentStart
-        forMainFrameOnly:NO];
-    [ucc addUserScript:script];
+    return source;
 }
 
-%hook WKUserContentController
-- (instancetype)init {
-    WKUserContentController *ucc = %orig;
-    PR_InstallScript(ucc);
-    return ucc;
+static NSString *S18SBuildBootstrap(void) {
+    // Serialize the complete one-time build. Marking the cache attempted before
+    // construction completed allowed a racing WKWebView init to cache a false nil.
+    os_unfair_lock_lock(&S18SBootstrapLock);
+    if (S18SBootstrapAttempted) {
+        NSString *cached = S18SCachedBootstrap;
+        os_unfair_lock_unlock(&S18SBootstrapLock);
+        return cached;
+    }
+
+    NSString *result = nil;
+    @autoreleasepool {
+        static const char * const resourceNames[] = {
+            "Bootstrap", "Polyfills", "CSSCompat", "Diagnostics"
+        };
+        const size_t resourceCount = sizeof(resourceNames) / sizeof(resourceNames[0]);
+        NSMutableString *combined = [[NSMutableString alloc] init];
+        NSString *separator = S18SString("\n;\n");
+
+        @try {
+            for (size_t index = 0; index < resourceCount; index++) {
+                NSString *part = S18SReadResource(resourceNames[index]);
+                if (part.length == 0) continue;
+                if (combined.length > 0 && separator) [combined appendString:separator];
+                [combined appendString:part];
+            }
+            if (combined.length > 0) result = [combined copy];
+        } @catch (NSException *exception) {
+            NSString *format = S18SString("[Safari18Stealth] bootstrap exception: %@");
+            if (format) NSLog(format, exception.reason ?: S18SString("unknown exception"));
+        }
+    }
+
+    S18SCachedBootstrap = result;
+    S18SBootstrapAttempted = YES;
+    os_unfair_lock_unlock(&S18SBootstrapLock);
+    return result;
 }
-%end
+
+static void S18SInstallOnController(WKUserContentController *controller) {
+    if (!controller) return;
+
+    @synchronized (controller) {
+        NSNumber *alreadyInstalled = objc_getAssociatedObject(controller, S18SInjectedKey);
+        if (alreadyInstalled.boolValue) return;
+
+        NSString *source = S18SBuildBootstrap();
+        if (source.length == 0) return;
+
+        WKUserScript *userScript = [[WKUserScript alloc] initWithSource:source
+                                                           injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                                        forMainFrameOnly:NO];
+        if (!userScript) return;
+
+        [controller addUserScript:userScript];
+        objc_setAssociatedObject(controller,
+                                 S18SInjectedKey,
+                                 [NSNumber numberWithBool:YES],
+                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+        NSString *format = S18SString("[Safari18Stealth] %@ installed");
+        NSString *version = S18SString(S18SVersion);
+        if (format) NSLog(format, version);
+    }
+}
 
 %hook WKWebView
+
 - (instancetype)initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
-    WKWebView *view = %orig;
-    if (view) {
-        PR_InstallScript(view.configuration.userContentController);
-    }
+    WKWebView *view = %orig(frame, configuration);
+    if (view) S18SInstallOnController(view.configuration.userContentController);
     return view;
 }
 
-- (instancetype)_initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
+- (instancetype)initWithCoder:(NSCoder *)coder {
     WKWebView *view = %orig;
-    if (view) {
-        PR_InstallScript(view.configuration.userContentController);
-        view.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
-    }
+    if (view) S18SInstallOnController(view.configuration.userContentController);
     return view;
 }
 
