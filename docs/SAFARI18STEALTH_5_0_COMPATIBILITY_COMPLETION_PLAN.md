@@ -74,3 +74,21 @@ Use a versioned test matrix with explicit test IDs and results: PASS / PARTIAL /
 ## Current status
 
 The diagnostics-hardening PR is an initial diagnostic improvement only. Workstreams A–F remain to be audited and/or implemented and tested. Do not label the project 99% complete until the release gates above have evidence attached.
+
+## Device harness added
+
+A manual real-device fixture is available at `Tests/device/compatibility.html`. It exercises selected Set methods, URL.parse, Blob/Response bytes, Promise.withResolvers, Popover, Declarative Shadow DOM parser behavior, viewport units, selected CSS features, StorageManager, lifecycle event exposure, and same-origin iframe messaging. The build workflow syntax-checks its embedded JavaScript.
+
+Run it in Mobile Safari on the target iPhone with Safari18Stealth enabled, export the JSON report, then repeat with the tweak disabled for a baseline. This harness is a focused smoke suite, not the complete Safari 17/18 matrix. It does not test third-party site acceptance or certify the 99% target.
+
+## Remaining implementation and evidence gaps
+
+- Expand standards-derived tests for Set-like protocol getters/iteration order, mutation during iteration, URL parsing edge cases, body-used and disturbed stream semantics, AbortSignal, structured clone, and native-capability no-op behavior.
+- Expand Popover behavior coverage: nested auto popovers, light-dismiss boundaries, invoker activation, toggle event task timing, focus restoration, shadow-tree event paths, and invalid-state exceptions. Keep native top-layer differences explicitly partial.
+- Add deterministic fixtures for Dialog/inert, forms, custom elements, observer scheduling, dynamic stylesheet insertion, CSSOM edge cases, and viewport/layout changes during orientation and browser chrome changes.
+- Add multi-page navigation fixtures for pageshow/pagehide/BFCache, iframe navigation/sandbox/origin isolation, and postMessage source/origin validation.
+- Run real-device tests on the declared iOS/WebKit versions and collect sanitized reports. Node VM tests are not a substitute for JavaScriptCore/WebKit behavior.
+- Run site acceptance for PayPal and Amazon on the target device, with tweak enabled/disabled comparison and repeatable outcomes. No such evidence is currently recorded.
+- Validate package install, upgrade, uninstall, rollback, launch stability, memory and CPU on the target jailbroken device.
+
+The final release remains blocked until the above gaps are resolved or explicitly classified outside the supported scope, and the versioned in-scope matrix reaches at least 99% PASS with all critical tests passing.
