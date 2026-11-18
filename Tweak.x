@@ -2,8 +2,14 @@
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 
-static NSString *const kStealthUA =
-@"Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1";
+static NSString *PR_NativeSafariUA(void) {
+    NSOperatingSystemVersion v = [NSProcessInfo processInfo].operatingSystemVersion;
+    NSInteger major = v.majorVersion;
+    NSInteger minor = v.minorVersion;
+    NSInteger patch = v.patchVersion;
+    return [NSString stringWithFormat:@"Mozilla/5.0 (iPhone; CPU iPhone OS %ld_%ld_%ld like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/%ld.%ld Mobile/15E148 Safari/604.1",
+            (long)major,(long)minor,(long)patch,(long)major,(long)minor];
+}
 
 static NSString *GetStealthEngineJS(void) {
     static NSString *js;
@@ -12,134 +18,82 @@ static NSString *GetStealthEngineJS(void) {
         js =
         @"(() => {"
         @"'use strict';"
-        @"if (window.__Safari18Stealth_v250) return;"
-        @"Object.defineProperty(window,'__Safari18Stealth_v230',{value:true,configurable:false});"
+        @"if (window.__Safari18StealthFinal31) return;"
+        @"Object.defineProperty(window,'__Safari18StealthFinal31',{value:true,configurable:false});"
 
-        // Keep native-looking function strings without replacing Function#toString itself.
-        @"const nativeMap=new WeakMap();"
-        @"const markNative=(fn,name)=>{try{nativeMap.set(fn,'function '+name+'() { [native code] }')}catch(_){}};"
-        @"const install=(obj,key,fn,name)=>{"
+        // Additive-only compatibility: never replace APIs that WebKit already provides.
+        @"const install=(obj,key,fn)=>{"
           @"if(!obj||key in obj)return;"
-          @"markNative(fn,name||key);"
           @"try{Object.defineProperty(obj,key,{value:fn,configurable:true,writable:true,enumerable:false})}catch(_){}"
         @"};"
-
-        // Safe modern JS compatibility. Never replace an API which WebKit already has.
         @"install(Object,'hasOwn',function hasOwn(o,p){"
           @"if(o==null)throw new TypeError('Cannot convert undefined or null to object');"
           @"return Object.prototype.hasOwnProperty.call(Object(o),p)"
-        @"},'hasOwn');"
+        @"});"
         @"install(Object,'groupBy',function groupBy(items,cb){"
           @"const out=Object.create(null);let i=0;"
-          @"for(const item of items){const k=cb(item,i++);(out[k] ? out[k] : (out[k]=[])).push(item)}"
+          @"for(const item of items){const k=cb(item,i++);(out[k]||(out[k]=[])).push(item)}"
           @"return out"
-        @"},'groupBy');"
+        @"});"
         @"install(Map,'groupBy',function groupBy(items,cb){"
           @"const out=new Map();let i=0;"
-          @"for(const item of items){const k=cb(item,i++),a=out.get(k);"
-          @"if(a)a.push(item);else out.set(k,[item])}"
+          @"for(const item of items){const k=cb(item,i++),a=out.get(k);if(a)a.push(item);else out.set(k,[item])}"
           @"return out"
-        @"},'groupBy');"
+        @"});"
         @"install(Promise,'withResolvers',function withResolvers(){"
-          @"let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j});"
-          @"return{promise,resolve,reject}"
-        @"},'withResolvers');"
-        @"install(URL,'canParse',function canParse(u,b){try{new URL(u,b);return true}catch(_){return false}},'canParse');"
-        @"install(Array.prototype,'at',function at(n){const a=this,l=a.length;let i=Math.trunc(n)||0;if(i<0)i+=l;return i<0||i>=l?undefined:a[i]},'at');"
-        @"install(Array.prototype,'toSorted',function toSorted(fn){return Array.from(this).sort(fn)},'toSorted');"
-        @"install(Array.prototype,'toReversed',function toReversed(){return Array.from(this).reverse()},'toReversed');"
-        @"install(Array.prototype,'toSpliced',function toSpliced(s,d,...items){const a=Array.from(this);a.splice(s,d,...items);return a},'toSpliced');"
-        @"install(Array.prototype,'with',function withFn(i,v){const a=Array.from(this),n=i<0?a.length+i:i;if(n<0||n>=a.length)throw new RangeError('Invalid index');a[n]=v;return a},'with');"
+          @"let resolve,reject;const promise=new Promise((r,j)=>{resolve=r;reject=j});return{promise,resolve,reject}"
+        @"});"
+        @"install(URL,'canParse',function canParse(u,b){try{new URL(u,b);return true}catch(_){return false}});"
+        @"install(Array.prototype,'at',function at(n){const a=this,l=a.length;let i=Math.trunc(n)||0;if(i<0)i+=l;return i<0||i>=l?undefined:a[i]});"
+        @"install(Array.prototype,'toSorted',function toSorted(fn){return Array.from(this).sort(fn)});"
+        @"install(Array.prototype,'toReversed',function toReversed(){return Array.from(this).reverse()});"
+        @"install(Array.prototype,'toSpliced',function toSpliced(s,d,...items){const a=Array.from(this);a.splice(s,d,...items);return a});"
+        @"install(Array.prototype,'with',function withFn(i,v){const a=Array.from(this),n=i<0?a.length+i:i;if(n<0||n>=a.length)throw new RangeError('Invalid index');a[n]=v;return a});"
 
-        // Browser identity is changed only at the web content layer.
+        // Keep the page aligned with the real device locale without changing account/server region.
         @"try{"
           @"const nav=Navigator.prototype;"
-          @"const ua='Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1';"
-          @"const av='5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1';"
-          @"Object.defineProperty(nav,'userAgent',{get:()=>ua,configurable:true});"
-          @"Object.defineProperty(nav,'appVersion',{get:()=>av,configurable:true});"
-          @"Object.defineProperty(nav,'language',{get:()=> 'en-US',configurable:true});"
-          @"Object.defineProperty(nav,'languages',{get:()=> ['en-US','en'],configurable:true});"
+          @"if(!Object.getOwnPropertyDescriptor(nav,'language'))Object.defineProperty(nav,'language',{get:()=> 'en-US',configurable:true});"
+          @"if(!Object.getOwnPropertyDescriptor(nav,'languages'))Object.defineProperty(nav,'languages',{get:()=> ['en-US','en'],configurable:true});"
         @"}catch(_){}"
 
-        // CSS compatibility: transform only the exact rule being inserted.
-        @"const css=(s)=>{"
-          @"if(typeof s!=='string'||s.length>200000)return s;"
-          @"let x=s;"
-          @"x=x.replace(/(\\d+(?:\\.\\d+)?)(?:dvh|svh|lvh)\\b/g,'$1vh');"
-          // Do not rewrite @layer or nesting globally: complex rewrites can corrupt modern apps.
-          @"return x"
-        @"};"
-        @"try{"
-          @"const proto=CSSStyleSheet.prototype;"
-          @"const original=proto.insertRule;"
-          @"if(original&&!original.__Safari18Stealth230){"
-            @"const wrapped=function insertRule(rule,index){"
-              @"try{return original.call(this,css(rule),index)}catch(e){return original.call(this,rule,index)}"
-            @"};"
-            @"Object.defineProperty(wrapped,'__Safari18Stealth230',{value:true});"
-            @"proto.insertRule=wrapped;"
-          @"}"
-        @"}catch(_){}"
-
-        // Only process dynamically-added STYLE nodes once; never mutate the observer's own marker.
-        @"try{"
-          @"const seen=new WeakSet();"
-          @"const process=(node)=>{"
-            @"if(!node||node.nodeType!==1||node.tagName!=='STYLE'||seen.has(node))return;"
-            @"seen.add(node);"
-            @"const t=node.textContent||'';"
-            @"if(t.indexOf('dvh')>=0||t.indexOf('svh')>=0||t.indexOf('lvh')>=0){"
-              @"try{node.textContent=css(t)}catch(_){}"
-            @"}"
-          @"};"
-          @"const start=()=>{"
-            @"if(!document.documentElement)return;"
-            @"const o=new MutationObserver(ms=>{for(const m of ms)for(const n of m.addedNodes)process(n)});"
-            @"o.observe(document.documentElement,{childList:true,subtree:true});"
-            @"for(const n of document.querySelectorAll('style'))process(n);"
-          @"};"
-          @"if(document.documentElement)start();else document.addEventListener('DOMContentLoaded',start,{once:true});"
-        @"}catch(_){}"
-
-        // Visual compatibility: do not globally override page layout or z-index.
-        // Only normalize hidden native dialogs when they are actually open.
-        @"const normalizeDialogs=()=>{"
-          @"try{for(const d of document.querySelectorAll('dialog[open],[role=dialog][aria-modal=true]')){"
-            @"const cs=getComputedStyle(d);"
-            @"if(cs.visibility==='hidden'&&d.getAttribute('aria-hidden')!=='true')d.style.setProperty('visibility','visible','important');"
-          @"}}catch(_){}"
-        @"};"
-        @"const stabilizeViewport=()=>{"
+        // Native iOS 18 WebKit already supports modern viewport units. Do not rewrite CSS.
+        // Only expose a stable viewport value for pages that explicitly need it.
+        @"const updateViewport=()=>{"
           @"try{"
-            @"document.documentElement.style.setProperty('--s18-safe-height',window.innerHeight+'px');"
+            @"const h=window.visualViewport?window.visualViewport.height:window.innerHeight;"
+            @"document.documentElement.style.setProperty('--s18-viewport-height',h+'px');"
+          @"}catch(_){}"
+        @"};"
+        @"if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',updateViewport,{once:true});else updateViewport();"
+        @"window.addEventListener('resize',updateViewport,{passive:true});"
+        @"if(window.visualViewport)window.visualViewport.addEventListener('resize',updateViewport,{passive:true});"
+
+        // Recover only semantically-open dialogs that are accidentally inert/hidden.
+        @"const recoverOpenUI=()=>{"
+          @"try{"
             @"for(const el of document.querySelectorAll('dialog[open],[role=dialog][aria-modal=\"true\"])){"
-              @"const cs=getComputedStyle(el);"
               @"if(el.hasAttribute('inert'))el.removeAttribute('inert');"
-              @"if(cs.visibility==='hidden')el.style.setProperty('visibility','visible','important');"
-              @"if(cs.display==='none')el.style.setProperty('display','block','important');"
-              @"if(cs.opacity==='0')el.style.setProperty('opacity','1','important');"
+              @"const cs=getComputedStyle(el);"
+              @"if(cs.visibility==='hidden'&&el.getAttribute('aria-hidden')!=='true')el.style.setProperty('visibility','visible','important');"
               @"if(cs.pointerEvents==='none')el.style.setProperty('pointer-events','auto','important');"
-              @"const r=el.getBoundingClientRect();"
-              @"if(r.width>0&&r.height>0&&r.top<window.innerHeight&&r.bottom>0&&r.left<window.innerWidth&&r.right>0)el.style.setProperty('z-index','2147483000','important');"
             @"}"
           @"}catch(_){}"
         @"};"
-        @"if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',stabilizeViewport,{once:true});else stabilizeViewport();"
-        @"window.addEventListener('resize',stabilizeViewport,{passive:true});"
-        @"try{new MutationObserver(()=>{clearTimeout(window.__s18Timer);window.__s18Timer=setTimeout(stabilizeViewport,80)}).observe(document.documentElement||document,{subtree:true,childList:true,attributes:true,attributeFilter:['open','aria-modal','inert','style','class']})}catch(_){}"
-        @"if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',normalizeDialogs,{once:true});"
-        @"else normalizeDialogs();"
+        @"if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',recoverOpenUI,{once:true});else recoverOpenUI();"
+        @"try{"
+          @"let timer=0;"
+          @"new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(recoverOpenUI,120)}).observe(document.documentElement||document,{subtree:true,childList:true,attributes:true,attributeFilter:['open','aria-modal','aria-hidden','inert']});"
+        @"}catch(_){}"
 
         @"})();";
     });
     return js;
 }
-
 static void PR_InstallScript(WKUserContentController *ucc) {
     if (!ucc) return;
     for (WKUserScript *script in ucc.userScripts) {
-        if ([script.source containsString:@"__Safari18Stealth_v230"]) return;
+        if ([script.source containsString:@"__Safari18StealthFinal31"]) return;
     }
     WKUserScript *script = [[WKUserScript alloc]
         initWithSource:GetStealthEngineJS()
@@ -161,7 +115,7 @@ static void PR_InstallScript(WKUserContentController *ucc) {
     WKWebView *view = %orig;
     if (view) {
         PR_InstallScript(view.configuration.userContentController);
-        view.customUserAgent = kStealthUA;
+        view.customUserAgent = PR_NativeSafariUA();
         view.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
     }
     return view;
@@ -171,17 +125,17 @@ static void PR_InstallScript(WKUserContentController *ucc) {
     WKWebView *view = %orig;
     if (view) {
         PR_InstallScript(view.configuration.userContentController);
-        view.customUserAgent = kStealthUA;
+        view.customUserAgent = PR_NativeSafariUA();
         view.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
     }
     return view;
 }
 
 - (void)setCustomUserAgent:(NSString *)customUserAgent {
-    %orig(kStealthUA);
+    %orig(PR_NativeSafariUA());
 }
 
 - (NSString *)customUserAgent {
-    return kStealthUA;
+    return PR_NativeSafariUA();
 }
 %end
