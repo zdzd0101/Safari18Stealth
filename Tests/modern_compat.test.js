@@ -4,6 +4,7 @@ const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '..', 'Polyfills', 'ModernCompat.js'), 'utf8');
 const documentListeners = Object.create(null);
 const documentElements = Object.create(null);
+class FakePushMessageData { arrayBuffer() { return Promise.resolve(new Uint8Array([6,7]).buffer); } }
 class FakeHTMLElement {
   constructor(tagName, attrs={}) { this.nodeType=1; this.tagName=tagName.toUpperCase(); this.attrs=new Map(Object.entries(attrs)); this.hidden=true; this.isConnected=true; this.events=[]; this.focused=false; }
   getAttribute(name) { return this.attrs.has(name) ? this.attrs.get(name) : null; }
@@ -17,7 +18,7 @@ const fakeDocument = {readyState:'complete', createElement(){return {innerHTML:'
   addEventListener(type,fn){documentListeners[type]=fn;}, getElementById(id){return documentElements[id] || null;}};
 const context = vm.createContext({
   URL, Blob, Response, Request, Set, Reflect, Object, Promise, Array, Map, Number, String, TypeError, Event, DOMException,
-  HTMLElement: FakeHTMLElement, document: fakeDocument,
+  HTMLElement: FakeHTMLElement, PushMessageData: FakePushMessageData, document: fakeDocument,
   navigator: {}, CSS: {supports(){return false;}}, console
 });
 vm.runInContext(`
@@ -63,8 +64,10 @@ if (!checks) throw new Error('ModernCompat tests failed');
  const blob=await new Blob([new Uint8Array([1,2,3])]).bytes();
  const response=await new Response(new Uint8Array([4,5])).bytes();
  const request=await new Request('https://example.com', {method:'POST', body:'abc'}).bytes();
+ const push=await new PushMessageData().bytes();
  if(Array.from(blob).join(',')!=='1,2,3') throw new Error('Blob.bytes');
  if(Array.from(response).join(',')!=='4,5') throw new Error('Response.bytes');
  if(new TextDecoder().decode(request)!=='abc') throw new Error('Request.bytes');
- console.log('ModernCompat tests passed: Set methods, URL.parse, Blob.bytes, Response.bytes, Request.bytes, Popover invokers/focus, Storage policy');
+ if(Array.from(push).join(',')!=='6,7') throw new Error('PushMessageData.bytes');
+ console.log('ModernCompat tests passed: Set methods, URL.parse, Blob.bytes, Response.bytes, Request.bytes, PushMessageData.bytes, Popover invokers/focus, Storage policy');
 })().catch(e=>{console.error(e);process.exitCode=1;});
