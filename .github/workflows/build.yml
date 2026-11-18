@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build and verify RootHide DEB on Ubuntu
+    name: Build and verify Safari-only RootHide DEB on Ubuntu
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -28,7 +28,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential clang make perl git curl ca-certificates dpkg-dev nodejs
+          sudo apt-get install -y --no-install-recommends build-essential clang make perl git curl ca-certificates dpkg-dev nodejs python3
 
       - name: Install RootHide Theos and verify toolchain
         env:
@@ -43,7 +43,7 @@ jobs:
           find "$THEOS" -type f \( -name ldid -o -name llvm-lipo -o -name clang \) -print || true
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
 
-      - name: Verify source layout
+      - name: Verify source layout and Safari-only filter
         run: |
           set -euxo pipefail
           test -f Makefile
@@ -54,6 +54,13 @@ jobs:
           test -f Polyfills/Polyfills.js
           test -f CSS/CSSCompat.js
           test -f Diagnostics/Diagnostics.js
+          python3 - <<'PY'
+          import plistlib
+          with open('Safari18Stealth.plist', 'rb') as f:
+              data = plistlib.load(f)
+          assert data['Filter']['Bundles'] == ['com.apple.mobilesafari']
+          print('Safari-only injection filter verified')
+          PY
 
       - name: Verify JavaScript syntax and tests
         run: |
@@ -79,6 +86,7 @@ jobs:
           dpkg-deb --info "$DEB"
           ARCH="$(dpkg-deb -f "$DEB" Architecture)"
           test "$ARCH" = "iphoneos-arm64e"
+          test "$(dpkg-deb -f "$DEB" Version)" = "2.1.1"
           dpkg-deb --contents "$DEB" | tee package-files.txt
           grep -F 'Safari18Stealth.dylib' package-files.txt
           grep -F 'Safari18Stealth.plist' package-files.txt
@@ -94,7 +102,7 @@ jobs:
       - name: Upload installable package
         uses: actions/upload-artifact@v4
         with:
-          name: Safari18Stealth-2.1.0-RootHide-iphoneos-arm64e
+          name: Safari18Stealth-2.1.1-RootHide-iphoneos-arm64e
           path: packages/*.deb
           if-no-files-found: error
           retention-days: 30
