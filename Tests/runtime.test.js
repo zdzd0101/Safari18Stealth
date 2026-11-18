@@ -3,7 +3,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const context = vm.createContext({
-  console, Date, URL, Reflect, WeakMap,
+  console, Date, URL, Reflect, WeakMap, Blob, Response, Set, Map, Promise, Array, Object,
   performance: {now: () => 1, getEntriesByType: () => []},
   MutationObserver: class { observe() {} },
   document: { querySelectorAll() { return []; } },
@@ -12,16 +12,17 @@ const context = vm.createContext({
 for (const relative of [
   '../Engine/Bootstrap.js',
   '../Polyfills/Polyfills.js',
+  '../Polyfills/ModernCompat.js',
   '../CSS/CSSCompat.js',
   '../Diagnostics/Diagnostics.js'
 ]) vm.runInContext(fs.readFileSync(path.join(__dirname, relative), 'utf8'), context);
 
 const result = vm.runInContext(`(() => {
   const api = globalThis.__Safari18Stealth__;
-  if (!api || api.version !== '3.3 FINAL') throw new Error('bootstrap/version failure');
+  if (!api || api.version !== '3.3 FINAL COMPLETE') throw new Error('bootstrap/version failure');
   if (typeof api.report !== 'function' || typeof api.selfTest !== 'function') throw new Error('diagnostics failure');
   const report = api.report();
-  if (!report.modules.bootstrap || !report.modules.polyfills || !report.modules.css || !report.modules.diagnostics) throw new Error('module report incomplete');
+  if (!report.modules.bootstrap || !report.modules.polyfills || !report.modules.css || !report.modules.diagnostics || !report.modules['modern-compat']) throw new Error('module report incomplete');
   const test = api.selfTest();
   if (!test.ok) throw new Error(JSON.stringify(test));
   return {version: report.version, modules: Object.keys(report.modules).length};
