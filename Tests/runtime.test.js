@@ -3,7 +3,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 const context = vm.createContext({
-  console, Date, URL, Reflect, WeakMap, Blob, Response, Set, Map, Promise, Array, Object,
+  console, Date, URL, Reflect, WeakMap, Blob, Response,
   performance: {now: () => 1, getEntriesByType: () => []},
   MutationObserver: class { observe() {} },
   document: { querySelectorAll() { return []; } },
