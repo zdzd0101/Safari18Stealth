@@ -55,7 +55,7 @@ static NSString *S18SBuildBootstrap(void) {
         };
         const size_t resourceCount = sizeof(resourceNames) / sizeof(resourceNames[0]);
         NSMutableString *combined = [[NSMutableString alloc] init];
-        NSString *separator = S18SString("\\n;\\n");
+        NSString *separator = S18SString("\n;\n");
         BOOL complete = YES;
 
         @try {
