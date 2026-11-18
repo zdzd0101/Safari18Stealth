@@ -122,7 +122,7 @@
       const mode = template.getAttribute('shadowrootmode');
       if (!host || host.shadowRoot || (mode !== 'open' && mode !== 'closed')) continue;
       try {
-        const root = host.attachShadow({ mode });
+        const root = host.attachShadow({ mode, delegatesFocus });
         root.appendChild(template.content);
         template.remove();
         attached++;
@@ -262,6 +262,7 @@
     declarativeShadowDOM: supportsDeclarativeShadowDOM,
     storageEstimate: !!(storageManager && typeof storageManager.estimate === 'function'),
     storagePersist: !!(storageManager && typeof storageManager.persist === 'function'),
+    storagePersisted: !!(storageManager && typeof storageManager.persisted === 'function'),
     viewTransitions: typeof document !== 'undefined' && typeof document.startViewTransition === 'function',
     css
   });
