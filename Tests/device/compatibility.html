@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Safari18Stealth Device Compatibility Harness</title>
+<style>
+:root { color-scheme: light dark; font: 16px/1.45 -apple-system, BlinkMacSystemFont, sans-serif; }
+body { margin: 0; padding: 18px; max-width: 900px; }
+h1 { font-size: 1.35rem; }
+button { padding: 10px 14px; margin: 4px; }
+.pass { color: #16803c; } .fail { color: #c33; } .partial { color: #a66b00; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; background: rgba(127,127,127,.12); padding: 12px; border-radius: 8px; }
+#popover-test { padding: 12px; border: 1px solid; }
+#dvh-test { height: 10dvh; }
+</style>
+</head>
+<body>
+<h1>Safari18Stealth — real-device compatibility harness</h1>
+<p>This page tests observable browser behavior. Run it in Safari on the target iPhone with the tweak enabled, then repeat with the tweak disabled. It does not test PayPal credentials, payments, or account data.</p>
+<button id="run">Run tests</button>
+<button id="download" disabled>Download JSON report</button>
+<div id="summary" aria-live="polite">Not run</div>
+<ol id="results"></ol>
+<div id="popover-test" popover="auto">Popover test panel</div>
+<div id="dvh-test" aria-hidden="true"></div>
+<pre id="details">Results will appear here.</pre>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  let lastReport = null;
+  const add = (rows, id, group, status, detail) => rows.push({id, group, status, detail: String(detail || '')});
+  async function run() {
+    const rows = [];
+    const check = async (id, group, fn) => {
+      try {
+        const result = await fn();
+        add(rows, id, group, result && result.status || 'PASS', result && result.detail || 'passed');
+      } catch (error) {
+        add(rows, id, group, 'FAIL', error && error.stack || error);
+      }
+    };
+    const assert = (value, message) => { if (!value) throw new Error(message); };
+    await check('JS-SET-01','JavaScript',() => {
+      const a = new Set([1,2,3]), b = new Set([2,4]);
+      assert([...a.difference(b)].join(',') === '1,3','difference');
+      assert([...a.intersection(b)].join(',') === '2','intersection');
+      assert([...a.union(b)].join(',') === '1,2,3,4','union');
+      assert([...a.symmetricDifference(b)].join(',') === '1,3,4','symmetricDifference');
+      assert(new Set([1,2]).isSubsetOf(a),'isSubsetOf');
+      assert(a.isSupersetOf(new Set([2,3])),'isSupersetOf');
+      assert(new Set([1]).isDisjointFrom(new Set([2])),'isDisjointFrom');
+    });
+    await check('JS-URL-01','JavaScript',() => {
+      assert(typeof URL.parse === 'function','URL.parse missing');
+      assert(URL.parse('https://example.com/path').hostname === 'example.com','valid URL');
+      assert(URL.parse('not a URL') === null,'invalid URL must return null');
+      assert(URL.parse('/relative','https://example.com').pathname === '/relative','base URL');
+    });
+    await check('JS-BYTES-01','JavaScript',async () => {
+      assert(typeof Blob.prototype.bytes === 'function','Blob.bytes missing');
+      const bytes = await new Blob([new Uint8Array([1,2,3])]).bytes();
+      assert([...bytes].join(',') === '1,2,3','Blob.bytes content');
+      assert(typeof Response !== 'undefined' && typeof Response.prototype.bytes === 'function','Response.bytes missing');
+      const responseBytes = await new Response('abc').bytes();
+      assert(new TextDecoder().decode(responseBytes) === 'abc','Response.bytes content');
+    });
+    await check('JS-PROMISE-01','JavaScript',async () => {
+      assert(typeof Promise.withResolvers === 'function','Promise.withResolvers missing');
+      const d = Promise.withResolvers(); d.resolve(42);
+      assert(await d.promise === 42,'resolver result');
+    });
+    await check('DOM-POPOVER-01','DOM',() => {
+      const el = $('popover-test');
+      assert(typeof el.showPopover === 'function' && typeof el.hidePopover === 'function','Popover methods missing');
+      el.showPopover();
+      assert(el.matches(':popover-open'),'popover not open in top layer');
+      el.hidePopover();
+      assert(!el.matches(':popover-open'),'popover did not close');
+    });
+    await check('DOM-DSD-01','DOM',() => {
+      const host = document.createElement('div');
+      host.innerHTML = '<template shadowrootmode="open"><span id="inside">ok</span></template>';
+      const native = !!host.shadowRoot;
+      if (!native) return {status:'PARTIAL',detail:'Native parser DSD unsupported; document-start fallback cannot guarantee parser-time semantics'};
+      assert(host.shadowRoot.querySelector('#inside').textContent === 'ok','shadow content');
+    });
+    await check('CSS-VIEWPORT-01','CSS/Layout',() => {
+      assert(CSS.supports('height: 100dvh'),'dvh unsupported');
+      assert(CSS.supports('height: 100svh'),'svh unsupported');
+      assert(CSS.supports('height: 100lvh'),'lvh unsupported');
+      assert($('dvh-test').getBoundingClientRect().height > 0,'dvh layout height');
+    });
+    await check('CSS-HAS-01','CSS/Layout',() => {
+      assert(CSS.supports('selector(:has(*))'),':has unsupported');
+    });
+    await check('CSS-CONTAINER-01','CSS/Layout',() => {
+      assert(CSS.supports('container-type: inline-size'),'container queries unsupported');
+    });
+    await check('CSS-COLOR-MIX-01','CSS/Layout',() => {
+      assert(CSS.supports('color: color-mix(in srgb, red, blue)'),'color-mix unsupported');
+    });
+    await check('STORAGE-API-01','Storage',async () => {
+      assert(navigator.storage && typeof navigator.storage.estimate === 'function','StorageManager.estimate missing');
+      const estimate = await navigator.storage.estimate();
+      assert(typeof estimate === 'object','estimate result');
+      if (typeof navigator.storage.persist === 'function') {
+        const persisted = await navigator.storage.persist();
+        assert(typeof persisted === 'boolean','persist result');
+      }
+    });
+    await check('LIFECYCLE-01','Lifecycle',() => {
+      assert('onpageshow' in window && 'onpagehide' in window,'page lifecycle events missing');
+      return {status:'PASS',detail:'pageshow/pagehide event handlers exposed; BFCache navigation requires manual multi-page test'};
+    });
+    await check('FRAME-POSTMESSAGE-01','Frames',async () => {
+      const frame = document.createElement('iframe');
+      frame.srcdoc = '<!doctype html><script>parent.postMessage({s18sFrameProbe:true}, "*")<\\/script>';
+      const message = await new Promise((resolve,reject) => {
+        const timer = setTimeout(() => reject(new Error('iframe postMessage timeout')),3000);
+        const handler = event => {
+          if (event.source !== frame.contentWindow || !event.data || !event.data.s18sFrameProbe) return;
+          clearTimeout(timer); window.removeEventListener('message',handler); resolve(event.data);
+        };
+        window.addEventListener('message',handler);
+        document.body.appendChild(frame);
+      });
+      assert(message.s18sFrameProbe,'iframe message mismatch');
+      frame.remove();
+    });
+    const passed = rows.filter(x=>x.status==='PASS').length;
+    const failed = rows.filter(x=>x.status==='FAIL').length;
+    const partial = rows.filter(x=>x.status==='PARTIAL').length;
+    lastReport = {
+      harness:'Safari18Stealth device compatibility harness',
+      generatedAt:new Date().toISOString(),
+      userAgent:navigator.userAgent,
+      platform:navigator.platform,
+      language:navigator.language,
+      tweakDetected:!!window.__Safari18Stealth__,
+      tweakVersion:window.__Safari18Stealth__ && window.__Safari18Stealth__.version || null,
+      totals:{tests:rows.length,passed,failed,partial},
+      rows
+    };
+    $('summary').textContent = passed + ' PASS · ' + failed + ' FAIL · ' + partial + ' PARTIAL · ' + rows.length + ' total. This is a device fixture run, not a website acceptance result.';
+    $('results').replaceChildren(...rows.map(row => {
+      const li=document.createElement('li');
+      li.className=row.status.toLowerCase();
+      li.textContent=row.id+' — '+row.status+' — '+row.detail;
+      return li;
+    }));
+    $('details').textContent=JSON.stringify(lastReport,null,2);
+    $('download').disabled=false;
+  }
+  $('run').addEventListener('click',()=>run().catch(error=>{$('details').textContent=String(error)}));
+  $('download').addEventListener('click',()=>{
+    if(!lastReport)return;
+    const blob=new Blob([JSON.stringify(lastReport,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download='safari18stealth-device-report.json';a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  });
+})();
+</script>
+</body>
+</html>
