@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euxo pipefail
           test -f Makefile
-          test -f Tweak.xm
+          test -f Tweak.x
           test -f Safari18Stealth.plist
           test -f control
           test -f Engine/Bootstrap.js
@@ -70,7 +70,7 @@ jobs:
           test -n "$DEB"
           dpkg-deb --info "$DEB"
           ARCH="$(dpkg-deb -f "$DEB" Architecture)"
-          test "$ARCH" = "iphoneos-arm64e"
+          test "$ARCH" = "iphoneos-arm64"
           dpkg-deb --contents "$DEB" | tee package-files.txt
           grep -F 'Safari18Stealth.dylib' package-files.txt
           grep -F 'Safari18Stealth.plist' package-files.txt
