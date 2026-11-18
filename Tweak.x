@@ -12,7 +12,7 @@ static NSString *GetStealthEngineJS(void) {
         js =
         @"(() => {"
         @"'use strict';"
-        @"if (window.__Safari18Stealth_v240) return;"
+        @"if (window.__Safari18Stealth_v250) return;"
         @"Object.defineProperty(window,'__Safari18Stealth_v230',{value:true,configurable:false});"
 
         // Keep native-looking function strings without replacing Function#toString itself.
@@ -113,14 +113,21 @@ static NSString *GetStealthEngineJS(void) {
         @"const stabilizeViewport=()=>{"
           @"try{"
             @"document.documentElement.style.setProperty('--s18-safe-height',window.innerHeight+'px');"
-            @"for(const el of document.querySelectorAll('[aria-hidden="true"][role="dialog"],dialog[open],[role=dialog][aria-modal="true"])){"
-              @"if((el.matches('dialog[open]')||el.getAttribute('aria-modal')==='true')&&el.getAttribute('aria-hidden')==='true')el.setAttribute('aria-hidden','false');"
+            @"for(const el of document.querySelectorAll('dialog[open],[role=dialog][aria-modal="true"])){"
+              @"const cs=getComputedStyle(el);"
               @"if(el.hasAttribute('inert'))el.removeAttribute('inert');"
+              @"if(cs.visibility==='hidden')el.style.setProperty('visibility','visible','important');"
+              @"if(cs.display==='none')el.style.setProperty('display','block','important');"
+              @"if(cs.opacity==='0')el.style.setProperty('opacity','1','important');"
+              @"if(cs.pointerEvents==='none')el.style.setProperty('pointer-events','auto','important');"
+              @"const r=el.getBoundingClientRect();"
+              @"if(r.width>0&&r.height>0&&r.top<window.innerHeight&&r.bottom>0&&r.left<window.innerWidth&&r.right>0)el.style.setProperty('z-index','2147483000','important');"
             @"}"
           @"}catch(_){}"
         @"};"
         @"if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',stabilizeViewport,{once:true});else stabilizeViewport();"
         @"window.addEventListener('resize',stabilizeViewport,{passive:true});"
+        @"try{new MutationObserver(()=>{clearTimeout(window.__s18Timer);window.__s18Timer=setTimeout(stabilizeViewport,80)}).observe(document.documentElement||document,{subtree:true,childList:true,attributes:true,attributeFilter:['open','aria-modal','inert','style','class']})}catch(_){}"
         @"if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',normalizeDialogs,{once:true});"
         @"else normalizeDialogs();"
 
