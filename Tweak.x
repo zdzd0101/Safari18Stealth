@@ -2,15 +2,6 @@
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 
-static NSString *PR_NativeSafariUA(void) {
-    NSOperatingSystemVersion v = [NSProcessInfo processInfo].operatingSystemVersion;
-    NSInteger major = v.majorVersion;
-    NSInteger minor = v.minorVersion;
-    NSInteger patch = v.patchVersion;
-    return [NSString stringWithFormat:@"Mozilla/5.0 (iPhone; CPU iPhone OS %ld_%ld_%ld like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/%ld.%ld Mobile/15E148 Safari/604.1",
-            (long)major,(long)minor,(long)patch,(long)major,(long)minor];
-}
-
 static NSString *GetStealthEngineJS(void) {
     static NSString *js;
     static dispatch_once_t onceToken;
