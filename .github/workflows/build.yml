@@ -1,0 +1,58 @@
+name: Build Safari18Stealth (RootHide)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - roothide-test-candidate-2.1
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    env:
+      THEOS: ${{ github.workspace }}/theos
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install RootHide Theos
+        run: |
+          git clone --recursive https://github.com/roothide/theos.git "$THEOS"
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+
+      - name: Verify JavaScript source and tests
+        run: |
+          node --check Engine/Bootstrap.js
+          node --check Polyfills/Polyfills.js
+          node --check CSS/CSSCompat.js
+          node --check Diagnostics/Diagnostics.js
+          node Tests/polyfills.test.js
+
+      - name: Stage runtime resources
+        run: |
+          mkdir -p "layout/Library/Application Support/Safari18Stealth"
+          cp Engine/Bootstrap.js "layout/Library/Application Support/Safari18Stealth/Bootstrap.js"
+          cp Polyfills/Polyfills.js "layout/Library/Application Support/Safari18Stealth/Polyfills.js"
+          cp CSS/CSSCompat.js "layout/Library/Application Support/Safari18Stealth/CSSCompat.js"
+          cp Diagnostics/Diagnostics.js "layout/Library/Application Support/Safari18Stealth/Diagnostics.js"
+
+      - name: Build RootHide package
+        run: |
+          make clean
+          make package THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1 THEOS_LAYOUT_DIR=layout
+
+      - name: Verify package exists
+        run: |
+          test -n "$(find packages -maxdepth 1 -name '*.deb' -print -quit)"
+          ls -lh packages/*.deb
+
+      - name: Upload test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Safari18Stealth-2.1.0-RootHide-iphoneos-arm64e
+          path: packages/*.deb
+          if-no-files-found: error
