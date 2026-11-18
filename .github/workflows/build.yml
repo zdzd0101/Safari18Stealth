@@ -23,17 +23,19 @@ jobs:
       THEOS: ${{ github.workspace }}/theos
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends build-essential clang make perl git curl ca-certificates dpkg-dev ldid nodejs
+          sudo apt-get install -y --no-install-recommends build-essential clang make perl git curl ca-certificates dpkg-dev nodejs
 
-      - name: Install RootHide Theos
+      - name: Install RootHide Theos and verify toolchain
         run: |
+          set -euxo pipefail
           bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"
           test -d "$THEOS/makefiles"
+          test -x "$THEOS/bin/ldid" || command -v ldid
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
 
       - name: Verify source layout
