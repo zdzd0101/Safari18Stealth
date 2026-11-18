@@ -26,6 +26,22 @@ def check_source() -> list[str]:
         failures.append("WKWebView injection hooks are missing")
     if "initWithFrame:" not in code or "initWithCoder:" not in code:
         failures.append("One or more WKWebView construction paths are missing")
+    if re.search(r"%hook\\s+WKUserContentController|_initWithFrame:", code):
+        failures.append("Unsafe controller/private WebKit initialization hook found")
+    if re.search(r"customUserAgent|systemVersion|operatingSystemVersion", code):
+        failures.append("Native OS or Safari user-agent identity override found")
+    if re.search(r"javaScriptCanOpenWindowsAutomatically", code):
+        failures.append("Global automatic-popup permission override found")
+    required = [
+        ROOT / "Engine" / "Bootstrap.js",
+        ROOT / "Polyfills" / "Polyfills.js",
+        ROOT / "Polyfills" / "ModernCompat.js",
+        ROOT / "CSS" / "CSSCompat.js",
+        ROOT / "Diagnostics" / "Diagnostics.js",
+    ]
+    for resource in required:
+        if not resource.is_file() or resource.stat().st_size == 0:
+            failures.append(f"Required runtime resource missing or empty: {resource.relative_to(ROOT)}")
     return failures
 
 
