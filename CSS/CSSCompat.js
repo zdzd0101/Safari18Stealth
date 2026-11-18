@@ -13,6 +13,13 @@
     });
   };
 
+  const fallbackValue = value => {
+    if (typeof value !== 'string' || !/(?:dvh|svh|lvh)\b/i.test(value)) return null;
+    return value.replace(/(\d*\.)?\d+(dvh|svh|lvh)\b/gi, match =>
+      match.replace(/dvh|svh|lvh/ig, 'vh')
+    );
+  };
+
   const processStyle = node => {
     if (!node || node.nodeType !== 1 || node.tagName !== 'STYLE') return;
     const original = node.textContent || '';
@@ -31,6 +38,28 @@
       state.applied.push('cssom-' + method);
     } catch (error) {
       state.errors.push({module:'cssom', method, message:String(error)});
+    }
+  };
+
+  const patchSetProperty = () => {
+    const prototype = typeof CSSStyleDeclaration !== 'undefined' ? CSSStyleDeclaration.prototype : null;
+    if (!prototype || typeof prototype.setProperty !== 'function') return;
+    const original = prototype.setProperty;
+    if (original.__s18sWrapped) return;
+    const wrapped = function(property, value, priority) {
+      const fallback = fallbackValue(value);
+      if (fallback && fallback !== value) {
+        Reflect.apply(original, this, [property, fallback, priority]);
+        return Reflect.apply(original, this, [property, value, priority]);
+      }
+      return Reflect.apply(original, this, arguments);
+    };
+    try {
+      Object.defineProperty(wrapped, '__s18sWrapped', {value:true});
+      Object.defineProperty(prototype, 'setProperty', {value:wrapped, configurable:true, writable:true});
+      state.applied.push('cssom-setProperty');
+    } catch (error) {
+      state.errors.push({module:'cssom', method:'setProperty', message:String(error)});
     }
   };
 
@@ -66,6 +95,7 @@
       if (typeof args[0] === 'string') args[0] = convertViewportUnits(args[0]);
       return args;
     });
+    patchSetProperty();
     state.record('css', 'applied', 'viewport-unit fallback without private WebKit APIs');
   } catch (error) {
     state.fail('css', error);
