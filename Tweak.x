@@ -60,7 +60,10 @@ static NSString *S18SBuildBootstrap(void) {
         @try {
             for (size_t index = 0; index < resourceCount; index++) {
                 NSString *part = S18SReadResource(resourceNames[index]);
-                if (part.length == 0) continue;
+                if (part.length == 0) {
+                    [combined setString:S18SString("")];
+                    break;
+                }
                 if (combined.length > 0 && separator) [combined appendString:separator];
                 [combined appendString:part];
             }
