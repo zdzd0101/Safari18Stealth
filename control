@@ -1,8 +1,8 @@
 Package: com.custom.safari18stealth
 Name: Safari18Stealth
-Version: 3.3.0
+Version: 4.0.0
 Architecture: iphoneos-arm64e
-Description: Safari-only WebKit compatibility layer for RootHide (3.3 FINAL COMPLETE)
+Description: Safari-only WebKit compatibility layer for RootHide (4.0 FINAL)
 Maintainer: custom
 Author: custom
 Section: Tweaks
