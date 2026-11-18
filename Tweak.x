@@ -63,7 +63,8 @@ static NSString *S18SBuildBootstrap(void) {
         }
         S18SCachedBootstrap = [combined copy];
         if (S18SCachedBootstrap.length == 0) {
-            NSLog(@"%@", S18SString("[Safari18Stealth] no JavaScript resources loaded; injection disabled"));
+            NSString *logFormat = S18SString("%@");
+            if (logFormat) NSLog(logFormat, S18SString("[Safari18Stealth] no JavaScript resources loaded; injection disabled"));
         }
     } @catch (NSException *exception) {
         NSString *format = S18SString("[Safari18Stealth] bootstrap initialization exception: %@");
