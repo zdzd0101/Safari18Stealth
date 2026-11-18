@@ -4,6 +4,7 @@ const path = require('node:path');
 
 const context = vm.createContext({
   console, Date, URL, Reflect, WeakMap,
+  performance: {now: () => 1, getEntriesByType: () => []},
   MutationObserver: class { observe() {} },
   document: { querySelectorAll() { return []; } },
   CSSStyleSheet: class { insertRule(rule) { this.rule = rule; return 0; } replaceSync(text) { this.text = text; } replace(text) { this.text = text; return Promise.resolve(); } },
