@@ -9,8 +9,8 @@ static NSString *GetStealthEngineJS(void) {
         js =
         @"(() => {"
         @"'use strict';"
-        @"if (window.__Safari18StealthFinal32) return;"
-        @"Object.defineProperty(window,'__Safari18StealthFinal32',{value:true,configurable:false});"
+        @"if (window.__Safari18StealthFinal321) return;"
+        @"Object.defineProperty(window,'__Safari18StealthFinal321',{value:true,configurable:false});"
 
         // Additive-only compatibility: never replace APIs that WebKit already provides.
         @"const install=(obj,key,fn)=>{"
@@ -79,7 +79,7 @@ static NSString *GetStealthEngineJS(void) {
 static void PR_InstallScript(WKUserContentController *ucc) {
     if (!ucc) return;
     for (WKUserScript *script in ucc.userScripts) {
-        if ([script.source containsString:@"__Safari18StealthFinal32"]) return;
+        if ([script.source containsString:@"__Safari18StealthFinal321"]) return;
     }
     WKUserScript *script = [[WKUserScript alloc]
         initWithSource:GetStealthEngineJS()
@@ -101,7 +101,6 @@ static void PR_InstallScript(WKUserContentController *ucc) {
     WKWebView *view = %orig;
     if (view) {
         PR_InstallScript(view.configuration.userContentController);
-        view.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
     }
     return view;
 }
