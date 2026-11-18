@@ -13,6 +13,7 @@
   const resources = [];
   const lifecycle = [];
   const policyViolations = [];
+  const crossOriginMessages = [];
   const pushBounded = (array, value, limit) => {
     array.push(value);
     if (array.length > limit) array.shift();
@@ -121,6 +122,13 @@
     if (typeof document !== 'undefined' && document.addEventListener) {
       document.addEventListener('visibilitychange', () => recordLifecycle('visibilitychange'));
     }
+    addEventListener('message', event => {
+      let origin = '';
+      try { origin = new URL(event.origin).origin; } catch (_) { origin = 'null'; }
+      pushBounded(crossOriginMessages, {origin, dataType:typeof event.data,
+        ports:event.ports && Number.isFinite(event.ports.length) ? event.ports.length : 0,
+        sourceWindow:!!event.source, time:Math.round(performance.now())}, 30);
+    });
     addEventListener('securitypolicyviolation', event => {
       let blockedHost = '';
       try { blockedHost = event.blockedURI && event.blockedURI !== 'inline' && event.blockedURI !== 'eval' ? safeHost(event.blockedURI) : ''; } catch (_) {}
@@ -218,7 +226,8 @@
         performance: performanceReport(),
         paypalChat: paypalChatSnapshot(),
         pageLifecycle: lifecycle.slice(-16),
-        contentSecurityPolicy: policyViolations.slice(-12)
+        contentSecurityPolicy: policyViolations.slice(-12),
+        crossOriginMessages: crossOriginMessages.slice(-20)
       }),
       enumerable: true, configurable: false, writable: false
     });
@@ -238,7 +247,7 @@
       },
       enumerable: true, configurable: false, writable: false
     });
-    state.record('diagnostics', 'applied', 'bounded runtime/performance diagnostics plus read-only chat SDK, DOM, frame, popover, CSP and page-lifecycle snapshots');
+    state.record('diagnostics', 'applied', 'bounded runtime/performance diagnostics plus read-only chat SDK, DOM, frame, popover, CSP, cross-origin message metadata and page-lifecycle snapshots');
   } catch (error) {
     state.fail('diagnostics', error);
   }
