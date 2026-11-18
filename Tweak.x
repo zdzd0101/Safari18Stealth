@@ -60,7 +60,13 @@ static NSString *S18SBuildBootstrap(void) {
         @try {
             for (size_t index = 0; index < resourceCount; index++) {
                 NSString *part = S18SReadResource(resourceNames[index]);
-                if (part.length == 0) continue;
+                // Never inject a partially assembled runtime. A missing module
+                // must fail closed instead of silently shipping an incomplete
+                // compatibility layer to every page/frame.
+                if (part.length == 0) {
+                    [combined setString:S18SString("")];
+                    break;
+                }
                 if (combined.length > 0 && separator) [combined appendString:separator];
                 [combined appendString:part];
             }
