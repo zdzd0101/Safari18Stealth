@@ -31,7 +31,7 @@ static NSString *GetStealthEngineJS(void) {
         @"},'hasOwn');"
         @"install(Object,'groupBy',function groupBy(items,cb){"
           @"const out=Object.create(null);let i=0;"
-          @"for(const item of items){const k=cb(item,i++);(out[k]??=[]).push(item)}"
+          @"for(const item of items){const k=cb(item,i++);(out[k] ? out[k] : (out[k]=[])).push(item)}"
           @"return out"
         @"},'groupBy');"
         @"install(Map,'groupBy',function groupBy(items,cb){"
