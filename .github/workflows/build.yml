@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - release/2.2.0-final
+      - release/2.2.0-final\n      - release/3.3-final
       - fix/2.2.0-arm64e-init-crash
 
 permissions:
@@ -78,7 +78,7 @@ jobs:
           dpkg-deb --info "$DEB"
           test "$(dpkg-deb -f "$DEB" Package)" = "com.custom.safari18stealth"
           test "$(dpkg-deb -f "$DEB" Architecture)" = "iphoneos-arm64e"
-          test "$(dpkg-deb -f "$DEB" Version)" = "2.2.0"
+          test "$(dpkg-deb -f "$DEB" Version)" = "3.3.0"
           dpkg-deb --contents "$DEB" | tee package-files.txt
           grep -F 'Safari18Stealth.dylib' package-files.txt
           grep -F 'Safari18Stealth.plist' package-files.txt
@@ -96,7 +96,7 @@ jobs:
       - name: Upload installable package and verification metadata
         uses: actions/upload-artifact@v4
         with:
-          name: Safari18Stealth-2.2.0-RootHide-iphoneos-arm64e
+          name: Safari18Stealth-3.3.0-RootHide-iphoneos-arm64e
           path: |
             packages/*.deb
             build-metadata.txt
