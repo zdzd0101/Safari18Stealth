@@ -123,6 +123,9 @@
     for (const template of templates) {
       const host = template.parentElement;
       const mode = template.getAttribute('shadowrootmode');
+      const delegatesFocus = template.hasAttribute('shadowrootdelegatesfocus');
+      const clonable = template.hasAttribute('shadowrootclonable');
+      const serializable = template.hasAttribute('shadowrootserializable');
       if (!host || host.shadowRoot || (mode !== 'open' && mode !== 'closed')) continue;
       try {
         const root = host.attachShadow({ mode, delegatesFocus, clonable, serializable });
