@@ -1,4 +1,4 @@
-name: Build Safari18Stealth (RootHide)
+name: Safari18Stealth RootHide build
 
 on:
   workflow_dispatch:
@@ -9,9 +9,16 @@ on:
 permissions:
   contents: read
 
+# Do not cancel a build merely because a later documentation/source commit arrives.
+concurrency:
+  group: safari18stealth-roothide-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
+    name: Build and verify RootHide DEB
     runs-on: macos-14
+    timeout-minutes: 30
     env:
       THEOS: ${{ github.workspace }}/theos
     steps:
@@ -20,16 +27,30 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          brew update
           brew install dpkg ldid
 
       - name: Install RootHide Theos
         run: |
-          git clone --recursive https://github.com/roothide/theos.git "$THEOS"
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"
+          test -d "$THEOS/makefiles"
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
 
-      - name: Verify JavaScript source and tests
+      - name: Verify source layout
         run: |
+          set -euxo pipefail
+          test -f Makefile
+          test -f Tweak.xm
+          test -f Safari18Stealth.plist
+          test -f control
+          test -f Engine/Bootstrap.js
+          test -f Polyfills/Polyfills.js
+          test -f CSS/CSSCompat.js
+          test -f Diagnostics/Diagnostics.js
+
+      - name: Verify JavaScript syntax and tests
+        run: |
+          set -euxo pipefail
+          node --version
           node --check Engine/Bootstrap.js
           node --check Polyfills/Polyfills.js
           node --check CSS/CSSCompat.js
@@ -38,26 +59,34 @@ jobs:
 
       - name: Build RootHide package
         run: |
+          set -euxo pipefail
           make clean
           make package THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1
 
-      - name: Verify package metadata and files
+      - name: Verify package metadata, binary and runtime resources
         run: |
-          set -e
+          set -euxo pipefail
           DEB="$(find packages -maxdepth 1 -name '*.deb' -print -quit)"
           test -n "$DEB"
           dpkg-deb --info "$DEB"
-          dpkg-deb --contents "$DEB"
-          dpkg-deb -f "$DEB" Architecture | grep -Fx 'iphoneos-arm64e'
-          dpkg-deb --contents "$DEB" | grep -F 'Safari18Stealth/Bootstrap.js'
-          dpkg-deb --contents "$DEB" | grep -F 'Safari18Stealth/Polyfills.js'
-          dpkg-deb --contents "$DEB" | grep -F 'Safari18Stealth/CSSCompat.js'
-          dpkg-deb --contents "$DEB" | grep -F 'Safari18Stealth/Diagnostics.js'
+          ARCH="$(dpkg-deb -f "$DEB" Architecture)"
+          test "$ARCH" = "iphoneos-arm64e"
+          dpkg-deb --contents "$DEB" | tee package-files.txt
+          grep -F 'Safari18Stealth.dylib' package-files.txt
+          grep -F 'Safari18Stealth.plist' package-files.txt
+          grep -F 'Safari18Stealth/Bootstrap.js' package-files.txt
+          grep -F 'Safari18Stealth/Polyfills.js' package-files.txt
+          grep -F 'Safari18Stealth/CSSCompat.js' package-files.txt
+          grep -F 'Safari18Stealth/Diagnostics.js' package-files.txt
+          mkdir extracted
+          dpkg-deb -x "$DEB" extracted
+          find extracted -type f -name '*.dylib' -exec file {} \;
           ls -lh "$DEB"
 
-      - name: Upload test package
+      - name: Upload installable package
         uses: actions/upload-artifact@v4
         with:
           name: Safari18Stealth-2.1.0-RootHide-iphoneos-arm64e
           path: packages/*.deb
           if-no-files-found: error
+          retention-days: 30
