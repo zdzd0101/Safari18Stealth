@@ -35,6 +35,7 @@ def check_source() -> list[str]:
     required = [
         ROOT / "Engine" / "Bootstrap.js",
         ROOT / "Polyfills" / "Polyfills.js",
+        ROOT / "Polyfills" / "ModernCompat.js",
         ROOT / "CSS" / "CSSCompat.js",
         ROOT / "Diagnostics" / "Diagnostics.js",
     ]
