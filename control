@@ -1,8 +1,8 @@
 Package: com.custom.safari18stealth
 Name: Safari18Stealth
-Version: 3.2.0
+Version: 3.2.1
 Architecture: iphoneos-arm64
-Description: Native iOS Safari/WebKit compatibility and stability layer.
+Description: Native WebKit compatibility diagnostics and low-impact stability layer.
 Maintainer: custom
 Author: custom
 Section: Tweaks
