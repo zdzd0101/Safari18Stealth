@@ -3,6 +3,21 @@
   const state = globalThis.__Safari18Stealth__;
   if (!state || typeof document === 'undefined') return;
 
+  // Safari on iOS 16.2 already implements dvh/svh/lvh (since Safari 15.4).
+  // Avoid installing a document-wide MutationObserver and CSSOM wrappers when
+  // the native engine supports these units; a fallback is only for engines
+  // that genuinely lack the syntax.
+  const nativeViewportUnits = typeof CSS !== 'undefined' &&
+    typeof CSS.supports === 'function' &&
+    CSS.supports('height: 100dvh') &&
+    CSS.supports('height: 100svh') &&
+    CSS.supports('height: 100lvh');
+  if (nativeViewportUnits) {
+    state.record('css', 'skipped', 'native dvh/svh/lvh support detected; fallback observer and CSSOM wrappers not installed');
+    state.skipped.push('native-viewport-units', 'private-webkit-apis', 'global-modal-forcing', 'css-parser-rewrite');
+    return;
+  }
+
   const viewportPattern = /(^|[;{]\s*)([a-zA-Z-]+\s*:\s*)([^;{}]*?)(\b(?:\d*\.)?\d+(?:dvh|svh|lvh)\b)(\s*!important)?(?=\s*[;}])/gi;
   const convertViewportUnits = css => {
     if (typeof css !== 'string' || !/(?:dvh|svh|lvh)\b/i.test(css)) return css;
