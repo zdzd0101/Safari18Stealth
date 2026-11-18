@@ -26,7 +26,7 @@ const result = vm.runInContext(`(() => {
   const test = api.selfTest();
   if (!test.ok) throw new Error(JSON.stringify(test));
   if (!report.paypalChat || !report.paypalChat.nodeChat || report.paypalChat.frames !== 0) throw new Error('chat diagnostic snapshot missing');
-  if (!Array.isArray(report.pageLifecycle) || !Array.isArray(report.contentSecurityPolicy)) throw new Error('lifecycle/CSP diagnostics missing');
+  if (!Array.isArray(report.pageLifecycle) || !Array.isArray(report.contentSecurityPolicy) || !Array.isArray(report.crossOriginMessages)) throw new Error('lifecycle/CSP/message diagnostics missing');
   if (new Set([1,2]).difference(new Set([2])).size !== 1) throw new Error('Set.difference polyfill');
   if (typeof URL.parse !== 'function' || URL.parse('invalid') !== null) throw new Error('URL.parse compatibility');
   return {version: report.version, modules: Object.keys(report.modules).length};
