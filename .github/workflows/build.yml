@@ -1,4 +1,4 @@
-name: Safari18Stealth RootHide build
+name: Safari18Stealth RootHide build (Ubuntu)
 
 on:
   workflow_dispatch:
@@ -16,8 +16,8 @@ concurrency:
 
 jobs:
   build:
-    name: Build and verify RootHide DEB
-    runs-on: macos-14
+    name: Build and verify RootHide DEB on Ubuntu
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       THEOS: ${{ github.workspace }}/theos
@@ -27,7 +27,8 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          brew install dpkg ldid
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential clang make perl git curl ca-certificates dpkg-dev ldid nodejs
 
       - name: Install RootHide Theos
         run: |
