@@ -3,7 +3,7 @@
   const KEY = '__Safari18Stealth__';
   if (Object.prototype.hasOwnProperty.call(globalThis, KEY)) return;
   const state = {
-    version: '2.1.0',
+    version: '2.1.1',
     mode: 'conservative',
     startedAt: Date.now(),
     applied: [],
