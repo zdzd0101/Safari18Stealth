@@ -5,7 +5,19 @@ const { URL } = require('node:url');
 
 const context = vm.createContext({ console, URL });
 vm.runInContext(`
-  globalThis.__Safari18Stealth__ = { applied: [], skipped: [], errors: [] };
+  globalThis.__Safari18Stealth__ = {
+    applied: [],
+    skipped: [],
+    errors: [],
+    modules: Object.create(null),
+    record(name, status, detail) {
+      this.modules[name] = { status, detail: detail || null };
+    },
+    fail(name, error) {
+      this.errors.push({ module: name, message: String(error) });
+      this.modules[name] = { status: 'error', detail: null };
+    }
+  };
   delete Object.hasOwn;
   delete Object.groupBy;
   delete Map.groupBy;
@@ -24,6 +36,9 @@ vm.runInContext(source, context);
 const result = vm.runInContext(`(() => {
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const original = [1, 2, 3, 4];
+  const state = globalThis.__Safari18Stealth__;
+
+  assert(state.modules.polyfills && state.modules.polyfills.status === 'applied', 'polyfills module record');
   assert(Object.hasOwn({ a: 1 }, 'a'), 'Object.hasOwn');
   assert(Object.groupBy([1, 2, 3], x => x % 2)['1'].length === 2, 'Object.groupBy');
   assert(Map.groupBy([1, 2, 3], x => x % 2).get(0).length === 1, 'Map.groupBy');
@@ -38,7 +53,7 @@ const result = vm.runInContext(`(() => {
   assert(!URL.canParse('not a URL'), 'URL.canParse invalid URL');
   const deferred = Promise.withResolvers();
   deferred.resolve('ok');
-  return { applied: globalThis.__Safari18Stealth__.applied.length, deferred: deferred.promise };
+  return { applied: state.applied.length, deferred: deferred.promise };
 })()`, context);
 
 result.deferred.then(value => {
