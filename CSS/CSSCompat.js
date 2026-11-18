@@ -6,8 +6,23 @@
   const viewportPattern = /(^|[;{]\s*)([a-zA-Z-]+\s*:\s*)([^;{}]*?)(\b(?:\d*\.)?\d+(?:dvh|svh|lvh)\b)(\s*!important)?(?=\s*[;}])/gi;
   const convertViewportUnits = css => {
     if (typeof css !== 'string' || !/(?:dvh|svh|lvh)\b/i.test(css)) return css;
-    return css.replace(viewportPattern, (whole, prefix, declaration, before, unit, important) => {
+    return css.replace(viewportPattern, (whole, prefix, declaration, before, unit, important, offset, source) => {
+      const property = declaration.slice(0, declaration.indexOf(':')).trim().toLowerCase();
       const fallback = unit.replace(/(?:dvh|svh|lvh)$/i, 'vh');
+
+      // The observer also sees the text-node replacement performed below.
+      // Do not insert the same fallback again when the preceding declaration
+      // is already the fallback generated for this modern-unit declaration.
+      const preceding = source.slice(0, offset);
+      const boundary = Math.max(preceding.lastIndexOf(';'), preceding.lastIndexOf('{'));
+      const previousDeclaration = preceding.slice(boundary + 1).trim();
+      const colon = previousDeclaration.indexOf(':');
+      const previousProperty = colon < 0 ? '' : previousDeclaration.slice(0, colon).trim().toLowerCase();
+      const previousValue = colon < 0 ? '' : previousDeclaration.slice(colon + 1).trim();
+      const expectedFallback = (before + fallback + (important || '')).trim();
+
+      if (previousProperty === property && previousValue === expectedFallback) return whole;
+
       return prefix + declaration + before + fallback + (important || '') + ';' +
              declaration + before + unit + (important || '');
     });
@@ -96,7 +111,7 @@
       return args;
     });
     patchSetProperty();
-    state.record('css', 'applied', 'viewport-unit fallback without private WebKit APIs');
+    state.record('css', 'applied', 'idempotent viewport-unit fallback and targeted CSSOM compatibility');
   } catch (error) {
     state.fail('css', error);
   }
