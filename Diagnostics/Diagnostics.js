@@ -129,7 +129,7 @@
           arrayToSorted: typeof Array.prototype.toSorted === 'function',
           arrayToSpliced: typeof Array.prototype.toSpliced === 'function',
           arrayWith: typeof Array.prototype.with === 'function'
-        },
+        }, state.capabilities || {}),
         performance: performanceReport()
       }),
       enumerable: true, configurable: false, writable: false
