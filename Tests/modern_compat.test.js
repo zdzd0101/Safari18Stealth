@@ -3,7 +3,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '..', 'Polyfills', 'ModernCompat.js'), 'utf8');
 const context = vm.createContext({
-  URL, Blob, Response, Set, Reflect, Object, Promise, Array, Map, Number, String, TypeError,
+  URL, Blob, Response, Request, Set, Reflect, Object, Promise, Array, Map, Number, String, TypeError,
   document: {readyState:'complete', createElement(){return {innerHTML:'', shadowRoot:null};}, querySelectorAll(){return [];}, addEventListener(){}},
   navigator: {}, CSS: {supports(){return false;}}, console
 });
@@ -39,7 +39,9 @@ if (!checks) throw new Error('ModernCompat tests failed');
 (async()=>{
  const blob=await new Blob([new Uint8Array([1,2,3])]).bytes();
  const response=await new Response(new Uint8Array([4,5])).bytes();
+ const request=await new Request('https://example.com', {method:'POST', body:'abc'}).bytes();
  if(Array.from(blob).join(',')!=='1,2,3') throw new Error('Blob.bytes');
  if(Array.from(response).join(',')!=='4,5') throw new Error('Response.bytes');
- console.log('ModernCompat tests passed: Set methods, URL.parse, Blob.bytes, Response.bytes, Storage policy');
+ if(new TextDecoder().decode(request)!=='abc') throw new Error('Request.bytes');
+ console.log('ModernCompat tests passed: Set methods, URL.parse, Blob.bytes, Response.bytes, Request.bytes, Storage policy');
 })().catch(e=>{console.error(e);process.exitCode=1;});
