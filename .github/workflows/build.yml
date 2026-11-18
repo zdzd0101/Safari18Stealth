@@ -11,6 +11,7 @@ on:
       - main
       - release/2.2.0-final
       - release/3.3-final-clean
+      - release/3.3-final-complete
       - fix/2.2.0-arm64e-init-crash
 
 permissions:
@@ -49,6 +50,7 @@ jobs:
           test -f control
           test -f Engine/Bootstrap.js
           test -f Polyfills/Polyfills.js
+          test -f Polyfills/ModernCompat.js
           test -f CSS/CSSCompat.js
           test -f Diagnostics/Diagnostics.js
           python3 - <<'PY'
@@ -65,6 +67,7 @@ jobs:
           node --version
           node --check Engine/Bootstrap.js
           node --check Polyfills/Polyfills.js
+          node --check Polyfills/ModernCompat.js
           node --check CSS/CSSCompat.js
           node --check Diagnostics/Diagnostics.js
           node Tests/polyfills.test.js
@@ -89,6 +92,7 @@ jobs:
           grep -F 'Safari18Stealth.plist' package-files.txt
           grep -F 'Safari18Stealth/Bootstrap.js' package-files.txt
           grep -F 'Safari18Stealth/Polyfills.js' package-files.txt
+          grep -F 'Safari18Stealth/ModernCompat.js' package-files.txt
           grep -F 'Safari18Stealth/CSSCompat.js' package-files.txt
           grep -F 'Safari18Stealth/Diagnostics.js' package-files.txt
           mkdir extracted

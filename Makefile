@@ -18,5 +18,6 @@ before-package::
 	mkdir -p "$(THEOS_STAGING_DIR)/Library/Application Support/Safari18Stealth"
 	cp Engine/Bootstrap.js "$(THEOS_STAGING_DIR)/Library/Application Support/Safari18Stealth/Bootstrap.js"
 	cp Polyfills/Polyfills.js "$(THEOS_STAGING_DIR)/Library/Application Support/Safari18Stealth/Polyfills.js"
+	cp Polyfills/ModernCompat.js "$(THEOS_STAGING_DIR)/Library/Application Support/Safari18Stealth/ModernCompat.js"
 	cp CSS/CSSCompat.js "$(THEOS_STAGING_DIR)/Library/Application Support/Safari18Stealth/CSSCompat.js"
 	cp Diagnostics/Diagnostics.js "$(THEOS_STAGING_DIR)/Library/Application Support/Safari18Stealth/Diagnostics.js"
