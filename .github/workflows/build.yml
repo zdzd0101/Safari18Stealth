@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - roothide-test-candidate-2.1
-      - fix/2.1.2-arm64e-init-crash
+      - fix/2.2.0-arm64e-init-crash
 
 permissions:
   contents: read
@@ -63,6 +63,7 @@ jobs:
           node --check Diagnostics/Diagnostics.js
           node Tests/polyfills.test.js
           node Tests/csscompat.test.js
+          node Tests/runtime.test.js
       - name: Build RootHide package
         run: |
           set -euxo pipefail
@@ -76,7 +77,7 @@ jobs:
           dpkg-deb --info "$DEB"
           test "$(dpkg-deb -f "$DEB" Package)" = "com.custom.safari18stealth"
           test "$(dpkg-deb -f "$DEB" Architecture)" = "iphoneos-arm64e"
-          test "$(dpkg-deb -f "$DEB" Version)" = "2.1.2"
+          test "$(dpkg-deb -f "$DEB" Version)" = "2.2.0"
           dpkg-deb --contents "$DEB" | tee package-files.txt
           grep -F 'Safari18Stealth.dylib' package-files.txt
           grep -F 'Safari18Stealth.plist' package-files.txt
@@ -94,7 +95,7 @@ jobs:
       - name: Upload installable package and verification metadata
         uses: actions/upload-artifact@v4
         with:
-          name: Safari18Stealth-2.1.2-RootHide-iphoneos-arm64e
+          name: Safari18Stealth-2.2.0-RootHide-iphoneos-arm64e
           path: |
             packages/*.deb
             build-metadata.txt
