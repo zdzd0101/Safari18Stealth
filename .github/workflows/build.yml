@@ -81,6 +81,14 @@ jobs:
           node Tests/csscompat.test.js
           node Tests/runtime.test.js
           node Tests/modern_compat.test.js
+          python3 - <<'PY'
+          import pathlib, re
+          html = pathlib.Path('Tests/device/compatibility.html').read_text(encoding='utf-8')
+          scripts = re.findall(r'<script>([\\s\\S]*?)</script>', html)
+          assert scripts, 'device compatibility harness script missing'
+          pathlib.Path('/tmp/safari18-device-harness.js').write_text(scripts[-1], encoding='utf-8')
+          PY
+          node --check /tmp/safari18-device-harness.js
       - name: Build RootHide package
         run: |
           set -euxo pipefail
