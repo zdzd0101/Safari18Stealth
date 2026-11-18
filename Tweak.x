@@ -6,7 +6,7 @@
 #import <roothide.h>
 #include <stddef.h>
 
-static const char S18SVersion[] = "3.3 FINAL";
+static const char S18SVersion[] = "3.3 FINAL COMPLETE";
 static const void *S18SInjectedKey = &S18SInjectedKey;
 static os_unfair_lock S18SBootstrapLock = OS_UNFAIR_LOCK_INIT;
 static NSString *S18SCachedBootstrap = nil;
@@ -22,15 +22,11 @@ static NSString *S18SReadResource(const char *resourceName) {
     NSString *prefix = S18SString("/Library/Application Support/Safari18Stealth/");
     NSString *suffix = S18SString(".js");
     if (!name || !prefix || !suffix) return nil;
-
     NSString *virtualPath = [[prefix stringByAppendingString:name] stringByAppendingString:suffix];
     NSString *path = jbroot(virtualPath);
     if (path.length == 0) return nil;
-
     NSError *error = nil;
-    NSString *source = [NSString stringWithContentsOfFile:path
-                                                  encoding:NSUTF8StringEncoding
-                                                     error:&error];
+    NSString *source = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:&error];
     if (!source && error) {
         NSString *format = S18SString("[Safari18Stealth] resource %@ unavailable: %@");
         if (format) NSLog(format, name, error.localizedDescription ?: S18SString("unknown error"));
@@ -39,30 +35,23 @@ static NSString *S18SReadResource(const char *resourceName) {
 }
 
 static NSString *S18SBuildBootstrap(void) {
-    // Serialize the complete one-time build. Marking the cache attempted before
-    // construction completed allowed a racing WKWebView init to cache a false nil.
     os_unfair_lock_lock(&S18SBootstrapLock);
     if (S18SBootstrapAttempted) {
         NSString *cached = S18SCachedBootstrap;
         os_unfair_lock_unlock(&S18SBootstrapLock);
         return cached;
     }
-
     NSString *result = nil;
     @autoreleasepool {
         static const char * const resourceNames[] = {
-            "Bootstrap", "Polyfills", "CSSCompat", "Diagnostics"
+            "Bootstrap", "Polyfills", "ModernCompat", "CSSCompat", "Diagnostics"
         };
         const size_t resourceCount = sizeof(resourceNames) / sizeof(resourceNames[0]);
         NSMutableString *combined = [[NSMutableString alloc] init];
         NSString *separator = S18SString("\n;\n");
-
         @try {
             for (size_t index = 0; index < resourceCount; index++) {
                 NSString *part = S18SReadResource(resourceNames[index]);
-                // Never inject a partially assembled runtime. A missing module
-                // must fail closed instead of silently shipping an incomplete
-                // compatibility layer to every page/frame.
                 if (part.length == 0) {
                     [combined setString:S18SString("")];
                     break;
@@ -76,7 +65,6 @@ static NSString *S18SBuildBootstrap(void) {
             if (format) NSLog(format, exception.reason ?: S18SString("unknown exception"));
         }
     }
-
     S18SCachedBootstrap = result;
     S18SBootstrapAttempted = YES;
     os_unfair_lock_unlock(&S18SBootstrapLock);
@@ -85,25 +73,17 @@ static NSString *S18SBuildBootstrap(void) {
 
 static void S18SInstallOnController(WKUserContentController *controller) {
     if (!controller) return;
-
     @synchronized (controller) {
         NSNumber *alreadyInstalled = objc_getAssociatedObject(controller, S18SInjectedKey);
         if (alreadyInstalled.boolValue) return;
-
         NSString *source = S18SBuildBootstrap();
         if (source.length == 0) return;
-
         WKUserScript *userScript = [[WKUserScript alloc] initWithSource:source
-                                                           injectionTime:WKUserScriptInjectionTimeAtDocumentStart
-                                                        forMainFrameOnly:NO];
+            injectionTime:WKUserScriptInjectionTimeAtDocumentStart forMainFrameOnly:NO];
         if (!userScript) return;
-
         [controller addUserScript:userScript];
-        objc_setAssociatedObject(controller,
-                                 S18SInjectedKey,
-                                 [NSNumber numberWithBool:YES],
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
+        objc_setAssociatedObject(controller, S18SInjectedKey, [NSNumber numberWithBool:YES],
+                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         NSString *format = S18SString("[Safari18Stealth] %@ installed");
         NSString *version = S18SString(S18SVersion);
         if (format) NSLog(format, version);
@@ -111,17 +91,14 @@ static void S18SInstallOnController(WKUserContentController *controller) {
 }
 
 %hook WKWebView
-
 - (instancetype)initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
     WKWebView *view = %orig(frame, configuration);
     if (view) S18SInstallOnController(view.configuration.userContentController);
     return view;
 }
-
 - (instancetype)initWithCoder:(NSCoder *)coder {
     WKWebView *view = %orig;
     if (view) S18SInstallOnController(view.configuration.userContentController);
     return view;
 }
-
 %end
