@@ -39,10 +39,10 @@ static NSString *S18SReadResource(const char *resourceName) {
 }
 
 static NSString *S18SBuildBootstrap(void) {
-    // Serialize the complete one-time build. Marking the cache attempted before
-    // construction completed allowed a racing WKWebView init to cache a false nil.
+    // Serialize construction. Cache only a complete bundle: a transient missing
+    // resource must not permanently disable injection for every later WKWebView.
     os_unfair_lock_lock(&S18SBootstrapLock);
-    if (S18SBootstrapAttempted) {
+    if (S18SBootstrapAttempted && S18SCachedBootstrap.length > 0) {
         NSString *cached = S18SCachedBootstrap;
         os_unfair_lock_unlock(&S18SBootstrapLock);
         return cached;
@@ -55,27 +55,36 @@ static NSString *S18SBuildBootstrap(void) {
         };
         const size_t resourceCount = sizeof(resourceNames) / sizeof(resourceNames[0]);
         NSMutableString *combined = [[NSMutableString alloc] init];
-        NSString *separator = S18SString("\n;\n");
+        NSString *separator = S18SString("\\n;\\n");
+        BOOL complete = YES;
 
         @try {
             for (size_t index = 0; index < resourceCount; index++) {
                 NSString *part = S18SReadResource(resourceNames[index]);
                 if (part.length == 0) {
+                    complete = NO;
                     [combined setString:S18SString("")];
                     break;
                 }
                 if (combined.length > 0 && separator) [combined appendString:separator];
                 [combined appendString:part];
             }
-            if (combined.length > 0) result = [combined copy];
+            if (complete && combined.length > 0) result = [combined copy];
         } @catch (NSException *exception) {
             NSString *format = S18SString("[Safari18Stealth] bootstrap exception: %@");
             if (format) NSLog(format, exception.reason ?: S18SString("unknown exception"));
         }
     }
 
-    S18SCachedBootstrap = result;
-    S18SBootstrapAttempted = YES;
+    if (result.length > 0) {
+        S18SCachedBootstrap = result;
+        S18SBootstrapAttempted = YES;
+    } else {
+        // Leave the cache retryable. A later WKWebView construction can retry
+        // after package resources become readable; never cache a partial bundle.
+        S18SCachedBootstrap = nil;
+        S18SBootstrapAttempted = NO;
+    }
     os_unfair_lock_unlock(&S18SBootstrapLock);
     return result;
 }
