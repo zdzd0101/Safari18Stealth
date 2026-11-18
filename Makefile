@@ -1,7 +1,6 @@
 TARGET := iphone:clang:latest:15.0
 # RootHide A12+ package: arm64 build slice with arm64e Debian architecture.
 ARCHS := arm64
-DEB_ARCH := iphoneos-arm64e
 THEOS_PACKAGE_SCHEME := roothide
 
 include $(THEOS)/makefiles/common.mk
