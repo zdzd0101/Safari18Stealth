@@ -37,7 +37,10 @@ jobs:
           set -euxo pipefail
           bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"
           test -d "$THEOS/makefiles"
-          test -x "$THEOS/bin/ldid" || command -v ldid
+          echo "Theos directory:"
+          ls -la "$THEOS"
+          echo "Searching for signing tools:"
+          find "$THEOS" -type f \( -name ldid -o -name llvm-lipo -o -name clang \) -print || true
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
 
       - name: Verify source layout
