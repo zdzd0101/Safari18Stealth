@@ -118,7 +118,7 @@
         applied: state.applied.slice(),
         skipped: state.skipped.slice(),
         errors: state.errors.slice(),
-        capabilities: {
+        capabilities: Object.assign({
           objectHasOwn: typeof Object.hasOwn === 'function',
           objectGroupBy: typeof Object.groupBy === 'function',
           mapGroupBy: typeof Map.groupBy === 'function',
