@@ -12,6 +12,7 @@ on:
       - release/2.2.0-final
       - release/3.3-final-clean
       - release/3.3-final-complete
+      - release/4.0-safari18.6-integration
       - fix/2.2.0-arm64e-init-crash
 
 permissions:
