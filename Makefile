@@ -6,7 +6,7 @@ THEOS_PACKAGE_SCHEME := roothide
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = Safari18Stealth
-Safari18Stealth_FILES = Tweak.xm
+Safari18Stealth_FILES = Tweak.x
 Safari18Stealth_CFLAGS = -fobjc-arc -O2 -Wall -Wextra
 Safari18Stealth_FRAMEWORKS = Foundation UIKit WebKit
 Safari18Stealth_INSTALL_PATH = /Library/MobileSubstrate/DynamicLibraries
