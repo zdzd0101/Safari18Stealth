@@ -25,6 +25,8 @@ const result = vm.runInContext(`(() => {
   if (!report.modules.bootstrap || !report.modules.polyfills || !report.modules.css || !report.modules.diagnostics || !report.modules['modern-compat']) throw new Error('module report incomplete');
   const test = api.selfTest();
   if (!test.ok) throw new Error(JSON.stringify(test));
+  if (!report.paypalChat || !report.paypalChat.nodeChat || report.paypalChat.frames !== 0) throw new Error('chat diagnostic snapshot missing');
+  if (!Array.isArray(report.pageLifecycle) || !Array.isArray(report.contentSecurityPolicy)) throw new Error('lifecycle/CSP diagnostics missing');
   if (new Set([1,2]).difference(new Set([2])).size !== 1) throw new Error('Set.difference polyfill');
   if (typeof URL.parse !== 'function' || URL.parse('invalid') !== null) throw new Error('URL.parse compatibility');
   return {version: report.version, modules: Object.keys(report.modules).length};
