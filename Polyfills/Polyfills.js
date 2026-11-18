@@ -111,4 +111,5 @@
     for (let k = 0; k < length; k++) result[k] = k === actual ? value : object[k];
     return result;
   });
+  state.record('polyfills', 'applied', 'modern JavaScript API compatibility');
 })();
