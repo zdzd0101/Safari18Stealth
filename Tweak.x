@@ -6,7 +6,7 @@
 #import <roothide.h>
 #include <stddef.h>
 
-static const char S18SVersion[] = "2.2.0";
+static const char S18SVersion[] = "3.3 FINAL";
 static const void *S18SInjectedKey = &S18SInjectedKey;
 static os_unfair_lock S18SBootstrapLock = OS_UNFAIR_LOCK_INIT;
 static NSString *S18SCachedBootstrap = nil;
