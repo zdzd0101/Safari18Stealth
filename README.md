@@ -47,3 +47,8 @@ The workflow result must be green before installing. A successful compile only p
 ## Runtime resources
 
 The build workflow stages JavaScript under `layout/Library/Application Support/Safari18Stealth/`. RootHide's `jbroot()` API resolves the randomized bootstrap path at runtime.
+
+
+## Candidate status
+
+This branch has passed local JavaScript syntax and polyfill smoke checks. Native Theos compilation, package inspection on the GitHub runner, injection on the target device, and PayPal page behavior remain pending until the Actions run and on-device test complete. Do not treat a green JavaScript test as proof of device compatibility.
