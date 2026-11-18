@@ -1,54 +1,66 @@
-# Safari18Stealth 2.1.0 — RootHide test candidate
+# Safari18Stealth 2.1.2 — RootHide / arm64e stability candidate
 
-This branch targets **Dopamine RootHide + Sileo** and the iPhone 11 Pro (A13 / arm64e) on iOS 16.2. It is a test candidate, not a claim that every modern website or PayPal flow is fixed.
+Safari18Stealth is a conservative WebKit compatibility tweak for Dopamine RootHide. Current target: iPhone 11 Pro (A13 / arm64e), iOS 16.2. The injection filter is restricted to com.apple.mobilesafari.
 
-## What this project does
+**2.1.2 is a stability candidate, not a claim of verified device stability.** The original 2.1.1 Actions artifact was recovered and its Mach-O UUID matched all three MobileSafari crash reports. Static analysis identified the failing native initialization path. The new candidate removes that path and adds automated regression checks; real-device validation is still required.
 
-- Injects a document-start compatibility script into Safari/WebKit main frames and child frames.
-- Adds selected missing JavaScript APIs only when the native implementation is absent.
-- Adds a conservative fallback for simple dynamic viewport-unit declarations.
-- Exposes `window.__Safari18Stealth__.report()` for diagnostics.
-- Resolves the resource directory through RootHide's `jbroot()` API rather than assuming a fixed `/var/jb` path.
-- Builds a RootHide package with the RootHide-maintained Theos fork.
+## Native stability changes
 
-## What it deliberately does not do
+- Removed the WKUserContentController -init hook so Safari's shared controller is not modified during early application startup.
+- Install the user script only after a real WKWebView has been constructed, via initWithFrame:configuration: or initWithCoder:.
+- Replaced the bootstrap's one-time dispatch block with an os_unfair_lock-protected cache.
+- Replaced Objective-C constant-string and array literals in Tweak.x with C string tables and runtime-created NSString instances.
+- Replaced NSArray assembly with sequential NSMutableString appends.
+- Added build-time Mach-O checks for arm64e, chained fixups, segment/section bounds, and absence of __cfstring.
 
-- It does not claim to upgrade the iOS 16.2 WebKit engine to iOS 18.
-- It does not spoof the operating-system version or User-Agent.
-- It does not proxy `Function.prototype.toString` or conceal injected code.
-- It does not force all dialogs, drawers, or page sections to be visible.
-- It does not disable CSP, same-origin policy, authentication, payment protections, or site security checks.
+## Compatibility modules
+
+| Module | Current behavior | Boundary |
+|---|---|---|
+| Bootstrap | Creates per-frame state and module report | Does not spoof OS version or User-Agent |
+| Polyfills | Selected missing APIs: Object.hasOwn, Object.groupBy, Map.groupBy, Promise.withResolvers, URL.canParse, and selected Array methods | Does not replace native APIs already present |
+| CSSCompat | Adds vh fallback for simple dvh/svh/lvh declarations in style elements and selected CSSOM entry points | Does not rewrite CSS nesting, cascade layers, arbitrary selectors, or the full CSS parser |
+| Diagnostics | window.__Safari18Stealth__.report() returns version, mode, applied/skipped modules, and errors | Does not collect or transmit browsing history, account data, or page contents |
+
+Inspect diagnostics in Safari Web Inspector:
+
+    window.__Safari18Stealth__?.report?.()
+
+## Explicit limitations
+
+- It does not upgrade iOS 16.2 WebKit to the iOS 18 engine.
+- It does not spoof OS version, device identity, or User-Agent.
+- It does not conceal injection from applications or security tools.
+- It does not bypass CSP, same-origin policy, authentication, payment protections, or site security checks.
 - It does not auto-click, submit, or alter payment transactions.
+- It does not force dialogs, drawers, or hidden page sections to appear.
 
-Some browser features are implemented in WebKit itself and cannot be recreated reliably by a JavaScript polyfill. CSS parsing and popup/window lifecycle compatibility also cannot be universally repaired from a document-start user script.
+Some browser capabilities are implemented inside WebKit and cannot be recreated reliably by JavaScript polyfills. Compatibility remains page- and API-specific.
 
 ## Build
 
-The GitHub Actions workflow uses a macOS runner and RootHide's Theos fork. It builds for the RootHide package scheme and uploads a `.deb` artifact. The package architecture is set to `iphoneos-arm64e` for the A13/arm64e target.
+The authoritative workflow is .github/workflows/build.yml. It uses Ubuntu 24.04 and RootHide's Theos fork to build an iphoneos-arm64e RootHide DEB. CI checks the Safari-only filter, JavaScript syntax/tests, package metadata/resources, and resulting Mach-O binary.
 
-The workflow result must be green before installing. A successful compile only proves the package builds; it does not prove the tweak loads on the device or fixes a particular website.
+A green Actions run proves automated build checks passed; it does not prove Safari launches on the target phone. Do not reinstall 2.1.1. Install 2.1.2 only after the new workflow succeeds, and keep the package easy to uninstall from Sileo.
 
-## Install on the test device
+## Device validation
 
-1. Keep a way to remove the package from Sileo and retain a copy of the previous working state.
-2. Download the `.deb` artifact from the successful GitHub Actions run.
-3. Transfer it to the iPhone and open it with Sileo/Filza's package installer.
-4. Confirm Sileo accepts the package architecture and dependencies. Do not force-install if it reports an architecture or dependency conflict.
-5. Respring only if Sileo requests it, then open Safari.
+1. Keep a known recovery path and do not rely on Safari as the only way to reach package-management instructions.
+2. Install the 2.1.2 DEB only after reviewing the successful Actions artifact and package metadata.
+3. Launch Safari repeatedly before opening websites. Confirm there is no immediate termination.
+4. Open a neutral page and an interactive page. Inspect window.__Safari18Stealth__?.report?.() in Web Inspector.
+5. Test PayPal Help navigation/drawer without submitting a transaction.
+6. Compare ordinary sites with the tweak enabled and disabled.
+7. If Safari crashes, uninstall the tweak from Sileo/RootHide and preserve the new IPS. Do not repeatedly relaunch into a crash loop.
 
-## Test sequence
+## Rollback
 
-1. Open a neutral static page and a normal interactive page.
-2. In Safari Web Inspector, evaluate `window.__Safari18Stealth__?.report?.()`.
-3. Test PayPal Help navigation and the help drawer/popup without initiating a payment.
-4. Test account pages and sign-in separately; do not use real payment submission as a smoke test.
-5. Compare with the tweak disabled. Record the URL, exact action, console error, and report output for each failure.
+If Safari becomes unstable, disable or uninstall com.custom.safari18stealth from Sileo. The tweak is filtered to MobileSafari and is not intended to inject into unrelated applications.
 
-## Runtime resources
+## Target
 
-The build workflow stages JavaScript under `layout/Library/Application Support/Safari18Stealth/`. RootHide's `jbroot()` API resolves the randomized bootstrap path at runtime.
-
-
-## Candidate status
-
-This branch has passed local JavaScript syntax and polyfill smoke checks. Native Theos compilation, package inspection on the GitHub runner, injection on the target device, and PayPal page behavior remain pending until the Actions run and on-device test complete. Do not treat a green JavaScript test as proof of device compatibility.
+- Device: iPhone 11 Pro / A13 / arm64e
+- OS: iOS 16.2
+- Jailbreak: Dopamine RootHide
+- Package: com.custom.safari18stealth
+- Version: 2.1.2

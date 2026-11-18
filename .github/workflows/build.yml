@@ -5,13 +5,13 @@ on:
   push:
     branches:
       - roothide-test-candidate-2.1
+      - fix/2.1.2-arm64e-init-crash
 
 permissions:
   contents: read
 
-# Do not cancel a build merely because a later documentation/source commit arrives.
 concurrency:
-  group: safari18stealth-roothide-${{ github.ref }}
+  group: safari18stealth-roothide-\${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -20,30 +20,21 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      THEOS: ${{ github.workspace }}/theos
+      THEOS: \${{ github.workspace }}/theos
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential clang make perl git curl ca-certificates dpkg-dev nodejs python3
-
       - name: Install RootHide Theos and verify toolchain
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
           bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"
           test -d "$THEOS/makefiles"
-          echo "Theos directory:"
-          ls -la "$THEOS"
-          echo "Searching for signing tools:"
-          find "$THEOS" -type f \( -name ldid -o -name llvm-lipo -o -name clang \) -print || true
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
-
-      - name: Verify source layout and Safari-only filter
+      - name: Verify source layout, Safari-only filter and native source safety
         run: |
           set -euxo pipefail
           test -f Makefile
@@ -61,7 +52,7 @@ jobs:
           assert data['Filter']['Bundles'] == ['com.apple.mobilesafari']
           print('Safari-only injection filter verified')
           PY
-
+          python3 Tests/native_safety.test.py
       - name: Verify JavaScript syntax and tests
         run: |
           set -euxo pipefail
@@ -71,22 +62,21 @@ jobs:
           node --check CSS/CSSCompat.js
           node --check Diagnostics/Diagnostics.js
           node Tests/polyfills.test.js
-
+          node Tests/csscompat.test.js
       - name: Build RootHide package
         run: |
           set -euxo pipefail
           make clean
           make package THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1
-
-      - name: Verify package metadata, binary and runtime resources
+      - name: Verify package metadata, runtime resources and Mach-O
         run: |
           set -euxo pipefail
           DEB="$(find packages -maxdepth 1 -name '*.deb' -print -quit)"
           test -n "$DEB"
           dpkg-deb --info "$DEB"
-          ARCH="$(dpkg-deb -f "$DEB" Architecture)"
-          test "$ARCH" = "iphoneos-arm64e"
-          test "$(dpkg-deb -f "$DEB" Version)" = "2.1.1"
+          test "$(dpkg-deb -f "$DEB" Package)" = "com.custom.safari18stealth"
+          test "$(dpkg-deb -f "$DEB" Architecture)" = "iphoneos-arm64e"
+          test "$(dpkg-deb -f "$DEB" Version)" = "2.1.2"
           dpkg-deb --contents "$DEB" | tee package-files.txt
           grep -F 'Safari18Stealth.dylib' package-files.txt
           grep -F 'Safari18Stealth.plist' package-files.txt
@@ -96,13 +86,18 @@ jobs:
           grep -F 'Safari18Stealth/Diagnostics.js' package-files.txt
           mkdir extracted
           dpkg-deb -x "$DEB" extracted
-          find extracted -type f -name '*.dylib' -exec file {} \;
-          ls -lh "$DEB"
-
-      - name: Upload installable package
+          DYLIB="$(find extracted -type f -name 'Safari18Stealth.dylib' -print -quit)"
+          test -n "$DYLIB"
+          file "$DYLIB"
+          python3 Tests/native_safety.test.py --binary "$DYLIB"
+          sha256sum "$DEB" "$DYLIB" | tee build-metadata.txt
+      - name: Upload installable package and verification metadata
         uses: actions/upload-artifact@v4
         with:
-          name: Safari18Stealth-2.1.1-RootHide-iphoneos-arm64e
-          path: packages/*.deb
+          name: Safari18Stealth-2.1.2-RootHide-iphoneos-arm64e
+          path: |
+            packages/*.deb
+            build-metadata.txt
+            package-files.txt
           if-no-files-found: error
           retention-days: 30
