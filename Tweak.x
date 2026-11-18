@@ -4,7 +4,7 @@
 #import <objc/runtime.h>
 #import <roothide.h>
 
-static NSString * const S18SVersion = @"2.1.0";
+static NSString * const S18SVersion = @"2.1.1";
 static const void *S18SInjectedKey = &S18SInjectedKey;
 
 // RootHide randomizes the bootstrap root. Never assume /var/jb exists.
