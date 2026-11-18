@@ -113,7 +113,7 @@ static NSString *GetStealthEngineJS(void) {
         @"const stabilizeViewport=()=>{"
           @"try{"
             @"document.documentElement.style.setProperty('--s18-safe-height',window.innerHeight+'px');"
-            @"for(const el of document.querySelectorAll('dialog[open],[role=dialog][aria-modal="true"])){"
+            @"for(const el of document.querySelectorAll('dialog[open],[role=dialog][aria-modal=\"true\"])){
               @"const cs=getComputedStyle(el);"
               @"if(el.hasAttribute('inert'))el.removeAttribute('inert');"
               @"if(cs.visibility==='hidden')el.style.setProperty('visibility','visible','important');"
