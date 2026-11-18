@@ -37,10 +37,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential clang make perl git curl ca-certificates dpkg-dev nodejs python3
       - name: Install RootHide Theos and verify toolchain
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euxo pipefail
           bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"
           test -d "$THEOS/makefiles"
+          test -d "$THEOS/sdks"
+          find "$THEOS/sdks" -maxdepth 1 -type d -name 'iPhoneOS*.sdk' -print -quit | grep -q .
           echo "THEOS=$THEOS" >> "$GITHUB_ENV"
       - name: Verify source layout, Safari-only filter and native source safety
         run: |
