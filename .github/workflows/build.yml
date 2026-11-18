@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: safari18stealth-roothide-\${{ github.ref }}
+  group: safari18stealth-roothide-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      THEOS: \${{ github.workspace }}/theos
+      THEOS: ${{ github.workspace }}/theos
     steps:
       - name: Checkout
         uses: actions/checkout@v5
