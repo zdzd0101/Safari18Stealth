@@ -14,7 +14,6 @@ static NSString *GetStealthEngineJS(void) {
         "  if (window.__wk18_loaded) return;"
         "  Object.defineProperty(window, '__wk18_loaded', { value: true, enumerable: false, configurable: false, writable: false });"
 
-        // 1. 原生函数签名隐身保护器 ([native code])
         "  const nativeMap = new WeakMap();"
         "  const origToString = Function.prototype.toString;"
         "  const proxiedToString = new Proxy(origToString, {"
@@ -32,7 +31,6 @@ static NSString *GetStealthEngineJS(void) {
         "    Object.defineProperty(obj, prop, { value: fn, enumerable: false, configurable: true, writable: true });"
         "  }"
 
-        // 2. Navigator 指纹一致性对齐（防止 JS 层与 HTTP Header UA 不一致触发风控）
         "  const uaVal = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1';"
         "  const appVerVal = '5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1';"
         "  const getUA = function userAgent() { return uaVal; };"
@@ -44,7 +42,6 @@ static NSString *GetStealthEngineJS(void) {
         "    Object.defineProperty(Navigator.prototype, 'appVersion', { get: getAppVer, enumerable: true, configurable: true });"
         "  } catch (_) {}"
 
-        // 3. 补全 iOS 17 / 18 现代 JS 核心 API（消除前端报错白屏）
         "  defineNative(Object, 'hasOwn', function hasOwn(o, p) {"
         "    if (o == null) throw new TypeError('Cannot convert undefined or null to object');"
         "    return Object.prototype.hasOwnProperty.call(Object(o), p);"
@@ -78,7 +75,6 @@ static NSString *GetStealthEngineJS(void) {
         "    return (k < 0 || k >= len) ? undefined : this[k];"
         "  });"
 
-        // 4. 现代 CSS 实时翻译（修复 PayPal 100dvh 高度坍塌 + @layer + & 嵌套）
         "  function upgradeModernCSS(css) {"
         "    if (!css) return css;"
         "    let out = css;"
@@ -118,7 +114,6 @@ static NSString *GetStealthEngineJS(void) {
         "  });"
         "  observer.observe(document.documentElement, { childList: true, subtree: true });"
 
-        // 5. 唤醒 PayPal 等站点的隐藏英雄区与 Help 抽屉弹窗层
         "  window.addEventListener('DOMContentLoaded', () => {"
         "    const fix = document.createElement('style');"
         "    fix.textContent = 'main, [role=\"main\"], section, [data-testid*=\"hero\"], [class*=\"hero\"] { opacity: 1 !important; visibility: visible !important; transform: none !important; } dialog[open], [role=\"dialog\"], [aria-modal=\"true\"], [class*=\"modal\"], [class*=\"drawer\"] { opacity: 1 !important; visibility: visible !important; }';"
@@ -130,29 +125,55 @@ static NSString *GetStealthEngineJS(void) {
     return js;
 }
 
+static void InjectStealthIntoWebView(WKWebView *webView) {
+    if (!webView) return;
+    WKUserContentController *ucc = webView.configuration.userContentController;
+    if (ucc) {
+        BOOL alreadyAdded = NO;
+        for (WKUserScript *s in ucc.userScripts) {
+            if ([s.source containsString:@"__wk18_loaded"]) {
+                alreadyAdded = YES;
+                break;
+            }
+        }
+        if (!alreadyAdded) {
+            WKUserScript *stealthScript = [[WKUserScript alloc] initWithSource:GetStealthEngineJS()
+                                                                 injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                                              forMainFrameOnly:NO];
+            [ucc addUserScript:stealthScript];
+        }
+    }
+    webView.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
+    if ([webView respondsToSelector:@selector(_setCustomUserAgent:)]) {
+        [(id)webView _setCustomUserAgent:kStealthUA];
+    }
+}
+
 %hook WKWebView
 
 - (instancetype)initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
-    if (!configuration) {
-        configuration = [[WKWebViewConfiguration alloc] init];
-    }
-    if (!configuration.userContentController) {
-        configuration.userContentController = [[WKUserContentController alloc] init];
-    }
-    WKUserScript *stealthScript = [[WKUserScript alloc] initWithSource:GetStealthEngineJS()
-                                                         injectionTime:WKUserScriptInjectionTimeAtDocumentStart
-                                                      forMainFrameOnly:NO];
-    [configuration.userContentController addUserScript:stealthScript];
-    configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
+    WKWebView *wv = %orig;
+    InjectStealthIntoWebView(wv);
+    return wv;
+}
 
-    WKWebView *webView = %orig(frame, configuration);
-    if (webView) {
-        webView.customUserAgent = kStealthUA;
+- (WKNavigation *)loadRequest:(NSURLRequest *)request {
+    InjectStealthIntoWebView(self);
+    if ([request isKindOfClass:[NSMutableURLRequest class]]) {
+        [(NSMutableURLRequest *)request setValue:kStealthUA forHTTPHeaderField:@"User-Agent"];
+    } else if (request) {
+        NSMutableURLRequest *mutReq = [request mutableCopy];
+        [mutReq setValue:kStealthUA forHTTPHeaderField:@"User-Agent"];
+        return %orig(mutReq);
     }
-    return webView;
+    return %orig;
 }
 
 - (void)setCustomUserAgent:(NSString *)customUserAgent {
+    %orig(kStealthUA);
+}
+
+- (void)_setCustomUserAgent:(NSString *)customUserAgent {
     %orig(kStealthUA);
 }
 
