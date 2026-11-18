@@ -51,7 +51,7 @@ static NSString *S18SBuildBootstrap(void) {
     NSString *result = nil;
     @autoreleasepool {
         static const char * const resourceNames[] = {
-            "Bootstrap", "Polyfills", "CSSCompat", "Diagnostics"
+            "Bootstrap", "Polyfills", "ModernCompat", "CSSCompat", "Diagnostics"
         };
         const size_t resourceCount = sizeof(resourceNames) / sizeof(resourceNames[0]);
         NSMutableString *combined = [[NSMutableString alloc] init];
