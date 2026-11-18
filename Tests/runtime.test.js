@@ -17,7 +17,7 @@ for (const relative of [
 
 const result = vm.runInContext(`(() => {
   const api = globalThis.__Safari18Stealth__;
-  if (!api || api.version !== '2.2.0') throw new Error('bootstrap/version failure');
+  if (!api || api.version !== '3.3 FINAL') throw new Error('bootstrap/version failure');
   if (typeof api.report !== 'function' || typeof api.selfTest !== 'function') throw new Error('diagnostics failure');
   const report = api.report();
   if (!report.modules.bootstrap || !report.modules.polyfills || !report.modules.css || !report.modules.diagnostics) throw new Error('module report incomplete');
