@@ -18,8 +18,8 @@ static NSString *GetStealthEngineJS(void) {
         js =
         @"(() => {"
         @"'use strict';"
-        @"if (window.__Safari18StealthFinal31) return;"
-        @"Object.defineProperty(window,'__Safari18StealthFinal31',{value:true,configurable:false});"
+        @"if (window.__Safari18StealthFinal32) return;"
+        @"Object.defineProperty(window,'__Safari18StealthFinal32',{value:true,configurable:false});"
 
         // Additive-only compatibility: never replace APIs that WebKit already provides.
         @"const install=(obj,key,fn)=>{"
@@ -50,13 +50,8 @@ static NSString *GetStealthEngineJS(void) {
         @"install(Array.prototype,'toSpliced',function toSpliced(s,d,...items){const a=Array.from(this);a.splice(s,d,...items);return a});"
         @"install(Array.prototype,'with',function withFn(i,v){const a=Array.from(this),n=i<0?a.length+i:i;if(n<0||n>=a.length)throw new RangeError('Invalid index');a[n]=v;return a});"
 
-        // Keep the page aligned with the real device locale without changing account/server region.
-        @"try{"
-          @"const nav=Navigator.prototype;"
-          @"if(!Object.getOwnPropertyDescriptor(nav,'language'))Object.defineProperty(nav,'language',{get:()=> 'en-US',configurable:true});"
-          @"if(!Object.getOwnPropertyDescriptor(nav,'languages'))Object.defineProperty(nav,'languages',{get:()=> ['en-US','en'],configurable:true});"
-        @"}catch(_){}"
-
+        // Preserve the device/browser locale; do not invent a region-language combination.
+        // Native Safari/WebKit supplies the authoritative locale signals.
         // Native iOS 18 WebKit already supports modern viewport units. Do not rewrite CSS.
         // Only expose a stable viewport value for pages that explicitly need it.
         @"const updateViewport=()=>{"
@@ -93,7 +88,7 @@ static NSString *GetStealthEngineJS(void) {
 static void PR_InstallScript(WKUserContentController *ucc) {
     if (!ucc) return;
     for (WKUserScript *script in ucc.userScripts) {
-        if ([script.source containsString:@"__Safari18StealthFinal31"]) return;
+        if ([script.source containsString:@"__Safari18StealthFinal32"]) return;
     }
     WKUserScript *script = [[WKUserScript alloc]
         initWithSource:GetStealthEngineJS()
@@ -115,7 +110,6 @@ static void PR_InstallScript(WKUserContentController *ucc) {
     WKWebView *view = %orig;
     if (view) {
         PR_InstallScript(view.configuration.userContentController);
-        view.customUserAgent = PR_NativeSafariUA();
         view.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
     }
     return view;
@@ -125,17 +119,9 @@ static void PR_InstallScript(WKUserContentController *ucc) {
     WKWebView *view = %orig;
     if (view) {
         PR_InstallScript(view.configuration.userContentController);
-        view.customUserAgent = PR_NativeSafariUA();
         view.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
     }
     return view;
 }
 
-- (void)setCustomUserAgent:(NSString *)customUserAgent {
-    %orig(PR_NativeSafariUA());
-}
-
-- (NSString *)customUserAgent {
-    return PR_NativeSafariUA();
-}
 %end
