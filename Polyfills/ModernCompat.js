@@ -218,6 +218,7 @@
     typeof document.startViewTransition === 'function' ? 'skipped' : 'limited',
     'native rendering snapshots cannot be polyfilled; callers must retain a non-transition path');
   record('modern-css', 'limited', 'feature detection only; unsupported layout/rendering primitives are not text-rewritten');
+  record('modern-compat', 'applied', 'capability-gated compatibility checks and limited fallbacks initialized');
   state.capabilities = Object.assign(state.capabilities || {}, {
     setMethods: Object.keys(setMethods).reduce((all, key) => { all[key] = typeof Set.prototype[key] === 'function'; return all; }, {}),
     urlParse: typeof URL !== 'undefined' && typeof URL.parse === 'function',
