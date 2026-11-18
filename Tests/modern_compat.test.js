@@ -64,7 +64,7 @@ if (!checks) throw new Error('ModernCompat tests failed');
  const blob=await new Blob([new Uint8Array([1,2,3])]).bytes();
  const response=await new Response(new Uint8Array([4,5])).bytes();
  const request=await new Request('https://example.com', {method:'POST', body:'abc'}).bytes();
- const push=await new PushMessageData().bytes();
+ const push=await new FakePushMessageData().bytes();
  if(Array.from(blob).join(',')!=='1,2,3') throw new Error('Blob.bytes');
  if(Array.from(response).join(',')!=='4,5') throw new Error('Response.bytes');
  if(new TextDecoder().decode(request)!=='abc') throw new Error('Request.bytes');
