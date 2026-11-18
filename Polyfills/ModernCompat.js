@@ -100,6 +100,9 @@
   if (typeof Request !== 'undefined') define(Request.prototype, 'bytes', async function bytes() {
     return new Uint8Array(await this.arrayBuffer());
   }, 'Request');
+  if (typeof PushMessageData !== 'undefined') define(PushMessageData.prototype, 'bytes', async function bytes() {
+    return new Uint8Array(await this.arrayBuffer());
+  }, 'PushMessageData');
 
   // Declarative Shadow DOM: only process templates when the native parser did
   // not already consume them. This is a bounded one-time scan, not a page-wide observer.
@@ -122,7 +125,7 @@
       const mode = template.getAttribute('shadowrootmode');
       if (!host || host.shadowRoot || (mode !== 'open' && mode !== 'closed')) continue;
       try {
-        const root = host.attachShadow({ mode, delegatesFocus });
+        const root = host.attachShadow({ mode, delegatesFocus, clonable, serializable });
         root.appendChild(template.content);
         template.remove();
         attached++;
@@ -258,6 +261,7 @@
     blobBytes: typeof Blob !== 'undefined' && typeof Blob.prototype.bytes === 'function',
     responseBytes: typeof Response !== 'undefined' && typeof Response.prototype.bytes === 'function',
     requestBytes: typeof Request !== 'undefined' && typeof Request.prototype.bytes === 'function',
+    pushMessageDataBytes: typeof PushMessageData !== 'undefined' && typeof PushMessageData.prototype.bytes === 'function',
     nativePopover,
     declarativeShadowDOM: supportsDeclarativeShadowDOM,
     storageEstimate: !!(storageManager && typeof storageManager.estimate === 'function'),
