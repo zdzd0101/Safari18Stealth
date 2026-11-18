@@ -25,10 +25,10 @@
     try { return new URL(name, location.href).host; } catch (_) { return ''; }
   };
   const safeMessage = value => String(value || 'unknown')
-    .replace(/https?:\\/\\/[^\\s)]+/gi, raw => {
+    .replace(/https?:\/\/[^\s)]+/gi, raw => {
       try { const u = new URL(raw); return u.origin + u.pathname; } catch (_) { return '[url]'; }
     })
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, '[email]')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
     .slice(0, 200);
 
   // Snapshot-only PayPal/chat diagnostics: no network interception, DOM mutation,
@@ -48,7 +48,7 @@
       const scripts = document.scripts || [];
       for (let i = 0; i < scripts.length && snapshot.messagingScripts.length < 12; i++) {
         const src = scripts[i].src || '';
-        if (!/paypalobjects\\.com\\/messaging|paypal\\.com\\/.*messag/i.test(src)) continue;
+        if (!/paypalobjects\.com\/messaging|paypal\.com\/.*messag/i.test(src)) continue;
         try { const u = new URL(src, location.href); snapshot.messagingScripts.push({host:u.host, path:u.pathname}); } catch (_) {}
       }
     } catch (_) {}
