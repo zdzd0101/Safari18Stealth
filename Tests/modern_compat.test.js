@@ -15,7 +15,7 @@ class FakeHTMLElement {
   focus() { this.focused=true; }
 }
 const fakeDocument = {readyState:'complete', createElement(){return {innerHTML:'', shadowRoot:null};}, querySelectorAll(){return [];},
-  addEventListener(type,fn){documentListeners[type]=fn;}, getElementById(id){return documentElements[id] || null;}};
+  addEventListener(type,fn){documentListeners[type]=fn;}, listeners:documentListeners, getElementById(id){return documentElements[id] || null;}};
 const context = vm.createContext({
   URL, Blob, Response, Request, Set, Reflect, Object, Promise, Array, Map, Number, String, TypeError, Event, DOMException,
   HTMLElement: FakeHTMLElement, PushMessageData: FakePushMessageData, document: fakeDocument,
@@ -46,9 +46,9 @@ const checks = vm.runInContext(`
  const pop=document.getElementById('chat-pop');
  if (!pop || typeof pop.showPopover !== 'function') throw new Error('Popover API fallback missing');
  const invoker=new HTMLElement('button',{popovertarget:'chat-pop',popovertargetaction:'show'});
- documentListeners.click({target:invoker,composedPath:()=>[invoker]});
+ document.listeners.click({target:invoker,composedPath:()=>[invoker]});
  assert(!pop.hidden && pop.hasAttribute('data-s18s-popover-open'),'popovertarget show action');
- documentListeners.keydown({key:'Escape'});
+ document.listeners.keydown({key:'Escape'});
  assert(pop.hidden && !pop.hasAttribute('data-s18s-popover-open'),'Escape closes popover');
  assert(invoker.focused,'Escape restores focus to invoker');
  assert(pop.events.indexOf('beforetoggle') < pop.events.indexOf('toggle'),'Popover event order');
