@@ -7,6 +7,8 @@
 		<key>Bundles</key>
 		<array>
 			<string>com.apple.mobilesafari</string>
+			<string>com.apple.WebKit.WebContent</string>
+			<string>com.apple.WebKit.Networking</string>
 		</array>
 	</dict>
 </dict>
