@@ -2,9 +2,22 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const source = fs.readFileSync(path.join(__dirname, '..', 'Polyfills', 'ModernCompat.js'), 'utf8');
+const documentListeners = Object.create(null);
+const documentElements = Object.create(null);
+class FakeHTMLElement {
+  constructor(tagName, attrs={}) { this.nodeType=1; this.tagName=tagName.toUpperCase(); this.attrs=new Map(Object.entries(attrs)); this.hidden=true; this.isConnected=true; this.events=[]; this.focused=false; }
+  getAttribute(name) { return this.attrs.has(name) ? this.attrs.get(name) : null; }
+  hasAttribute(name) { return this.attrs.has(name); }
+  setAttribute(name,value) { this.attrs.set(name,String(value)); }
+  removeAttribute(name) { this.attrs.delete(name); }
+  dispatchEvent(event) { this.events.push(event.type); return true; }
+  focus() { this.focused=true; }
+}
+const fakeDocument = {readyState:'complete', createElement(){return {innerHTML:'', shadowRoot:null};}, querySelectorAll(){return [];},
+  addEventListener(type,fn){documentListeners[type]=fn;}, getElementById(id){return documentElements[id] || null;}};
 const context = vm.createContext({
-  URL, Blob, Response, Request, Set, Reflect, Object, Promise, Array, Map, Number, String, TypeError,
-  document: {readyState:'complete', createElement(){return {innerHTML:'', shadowRoot:null};}, querySelectorAll(){return [];}, addEventListener(){}},
+  URL, Blob, Response, Request, Set, Reflect, Object, Promise, Array, Map, Number, String, TypeError, Event, DOMException,
+  HTMLElement: FakeHTMLElement, document: fakeDocument,
   navigator: {}, CSS: {supports(){return false;}}, console
 });
 vm.runInContext(`
@@ -15,6 +28,7 @@ vm.runInContext(`
     fail(name,error){this.errors.push({module:name,message:String(error)});}};
 `, context);
 vm.runInContext(source, context);
+documentElements['chat-pop'] = new FakeHTMLElement('div',{popover:'auto'});
 const checks = vm.runInContext(`
 (() => {
  const assert=(v,m)=>{if(!v)throw new Error(m);};
@@ -28,6 +42,15 @@ const checks = vm.runInContext(`
  assert(new Set([1]).isDisjointFrom(new Set([2])),'isDisjointFrom');
  assert(URL.parse('https://example.com').hostname==='example.com','URL.parse valid');
  assert(URL.parse('invalid')===null,'URL.parse invalid');
+ const pop=document.getElementById('chat-pop');
+ if (!pop || typeof pop.showPopover !== 'function') throw new Error('Popover API fallback missing');
+ const invoker=new HTMLElement('button',{popovertarget:'chat-pop',popovertargetaction:'show'});
+ documentListeners.click({target:invoker,composedPath:()=>[invoker]});
+ assert(!pop.hidden && pop.hasAttribute('data-s18s-popover-open'),'popovertarget show action');
+ documentListeners.keydown({key:'Escape'});
+ assert(pop.hidden && !pop.hasAttribute('data-s18s-popover-open'),'Escape closes popover');
+ assert(invoker.focused,'Escape restores focus to invoker');
+ assert(pop.events.indexOf('beforetoggle') < pop.events.indexOf('toggle'),'Popover event order');
  const s=globalThis.__Safari18Stealth__;
  assert(s.modules['storage-api'].status==='limited','Storage policy must not fabricate quota');
  assert(s.modules['modern-compat'].status==='applied','module record');
@@ -43,5 +66,5 @@ if (!checks) throw new Error('ModernCompat tests failed');
  if(Array.from(blob).join(',')!=='1,2,3') throw new Error('Blob.bytes');
  if(Array.from(response).join(',')!=='4,5') throw new Error('Response.bytes');
  if(new TextDecoder().decode(request)!=='abc') throw new Error('Request.bytes');
- console.log('ModernCompat tests passed: Set methods, URL.parse, Blob.bytes, Response.bytes, Request.bytes, Storage policy');
+ console.log('ModernCompat tests passed: Set methods, URL.parse, Blob.bytes, Response.bytes, Request.bytes, Popover invokers/focus, Storage policy');
 })().catch(e=>{console.error(e);process.exitCode=1;});
