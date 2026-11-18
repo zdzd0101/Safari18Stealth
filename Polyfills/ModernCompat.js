@@ -142,40 +142,52 @@
     }
   }
 
-  // Popover fallback is deliberately limited. It does not emulate the browser
-  // top layer, native light-dismiss ordering, or every popover event edge case.
+  // Popover fallback: API methods plus the HTML invoker attributes used by Safari 17.
+  // It intentionally cannot emulate the browser top layer, native focus navigation,
+  // exact toggle-event task timing, or all light-dismiss rules.
   const nativePopover = typeof HTMLElement !== 'undefined' &&
     typeof HTMLElement.prototype.showPopover === 'function' &&
     typeof HTMLElement.prototype.hidePopover === 'function';
   if (!nativePopover && typeof HTMLElement !== 'undefined' && typeof document !== 'undefined') {
     const openPopovers = [];
+    const invokers = new WeakMap();
     const isPopover = element => element && element.nodeType === 1 &&
       (element.getAttribute('popover') === 'auto' || element.getAttribute('popover') === 'manual' ||
        element.hasAttribute('popover'));
+    const dispatchPopoverEvent = (element, type) => {
+      try { element.dispatchEvent(new Event(type, {bubbles:false, cancelable:false})); } catch (_) {}
+    };
     const close = (element, reason) => {
       if (!element || !element.hasAttribute('data-s18s-popover-open')) return;
+      dispatchPopoverEvent(element, 'beforetoggle');
       element.removeAttribute('data-s18s-popover-open');
       element.hidden = true;
       const index = openPopovers.indexOf(element);
       if (index !== -1) openPopovers.splice(index, 1);
-      try { element.dispatchEvent(new Event('toggle')); } catch (_) {}
+      dispatchPopoverEvent(element, 'toggle');
       if (reason === 'escape') {
-        try { element.dispatchEvent(new Event('beforetoggle')); } catch (_) {}
+        const invoker = invokers.get(element);
+        if (invoker && typeof invoker.focus === 'function') {
+          try { invoker.focus(); } catch (_) {}
+        }
       }
     };
     define(HTMLElement.prototype, 'showPopover', function showPopover() {
       if (!isPopover(this) || !this.isConnected) throw new DOMException('Element is not a connected popover', 'InvalidStateError');
       if (this.hasAttribute('data-s18s-popover-open')) return;
+      if (this.getAttribute('popover') !== 'manual') {
+        for (const item of openPopovers.slice()) {
+          if (item !== this && item.getAttribute('popover') !== 'manual') close(item, 'light-dismiss');
+        }
+      }
+      dispatchPopoverEvent(this, 'beforetoggle');
       this.hidden = false;
       this.setAttribute('data-s18s-popover-open', '');
-      if (this.getAttribute('popover') !== 'manual') {
-        for (const item of openPopovers.slice()) if (item !== this && item.getAttribute('popover') !== 'manual') close(item, 'light-dismiss');
-      }
       openPopovers.push(this);
-      try { this.dispatchEvent(new Event('toggle')); } catch (_) {}
+      dispatchPopoverEvent(this, 'toggle');
     }, 'Popover');
     define(HTMLElement.prototype, 'hidePopover', function hidePopover() {
-      if (!isPopover(this)) throw new DOMException('Element is not a popover', 'InvalidStateError');
+      if (!isPopover(this)) throw new DOMException('Element is not a connected popover', 'InvalidStateError');
       close(this, 'api');
     }, 'Popover');
     define(HTMLElement.prototype, 'togglePopover', function togglePopover(force) {
@@ -184,8 +196,26 @@
       if (open) this.hidePopover(); else this.showPopover();
       return !open;
     }, 'Popover');
+
     document.addEventListener('click', event => {
       const path = typeof event.composedPath === 'function' ? event.composedPath() : [event.target];
+      // Implement popovertarget + popovertargetaction for invokers, including
+      // invokers surfaced through an open ShadowRoot's composed event path.
+      for (const node of path) {
+        if (!node || typeof node.getAttribute !== 'function') continue;
+        const targetId = node.getAttribute('popovertarget');
+        if (!targetId) continue;
+        const target = typeof document.getElementById === 'function' ? document.getElementById(targetId) : null;
+        if (!isPopover(target)) continue;
+        invokers.set(target, node);
+        const action = node.getAttribute('popovertargetaction') || 'toggle';
+        try {
+          if (action === 'show') target.showPopover();
+          else if (action === 'hide') target.hidePopover();
+          else target.togglePopover();
+        } catch (_) {}
+        return;
+      }
       const top = openPopovers[openPopovers.length - 1];
       if (top && top.getAttribute('popover') !== 'manual' && !path.includes(top)) close(top, 'light-dismiss');
     }, true);
@@ -194,7 +224,7 @@
       const top = openPopovers[openPopovers.length - 1];
       if (top && top.getAttribute('popover') !== 'manual') close(top, 'escape');
     }, true);
-    record('popover', 'applied', 'limited fallback; no native top layer or full spec event semantics');
+    record('popover', 'applied', 'API and popovertarget invoker fallback; no native top layer or complete focus/event semantics');
   } else {
     record('popover', 'skipped', 'native popover support detected');
   }
