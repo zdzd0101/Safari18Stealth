@@ -1,8 +1,8 @@
-# Safari18Stealth 2.1.2 — RootHide / arm64e stability candidate
+# Safari18Stealth 2.2.0 — RootHide / arm64e stability candidate
 
 Safari18Stealth is a conservative WebKit compatibility tweak for Dopamine RootHide. Current target: iPhone 11 Pro (A13 / arm64e), iOS 16.2. The injection filter is restricted to com.apple.mobilesafari.
 
-**2.1.2 is a stability candidate, not a claim of verified device stability.** The original 2.1.1 Actions artifact was recovered and its Mach-O UUID matched all three MobileSafari crash reports. Static analysis identified the failing native initialization path. The new candidate removes that path and adds automated regression checks; real-device validation is still required.
+**2.2.0 is a stability candidate, not a claim of verified device stability.** The original 2.1.1 Actions artifact was recovered and its Mach-O UUID matched all three MobileSafari crash reports. Static analysis identified the failing native initialization path. The new candidate removes that path and adds automated regression checks; real-device validation is still required.
 
 ## Native stability changes
 
@@ -41,12 +41,12 @@ Some browser capabilities are implemented inside WebKit and cannot be recreated 
 
 The authoritative workflow is .github/workflows/build.yml. It uses Ubuntu 24.04 and RootHide's Theos fork to build an iphoneos-arm64e RootHide DEB. CI checks the Safari-only filter, JavaScript syntax/tests, package metadata/resources, and resulting Mach-O binary.
 
-A green Actions run proves automated build checks passed; it does not prove Safari launches on the target phone. Do not reinstall 2.1.1. Install 2.1.2 only after the new workflow succeeds, and keep the package easy to uninstall from Sileo.
+A green Actions run proves automated build checks passed; it does not prove Safari launches on the target phone. Do not reinstall 2.1.1. Install 2.2.0 only after the new workflow succeeds, and keep the package easy to uninstall from Sileo.
 
 ## Device validation
 
 1. Keep a known recovery path and do not rely on Safari as the only way to reach package-management instructions.
-2. Install the 2.1.2 DEB only after reviewing the successful Actions artifact and package metadata.
+2. Install the 2.2.0 DEB only after reviewing the successful Actions artifact and package metadata.
 3. Launch Safari repeatedly before opening websites. Confirm there is no immediate termination.
 4. Open a neutral page and an interactive page. Inspect window.__Safari18Stealth__?.report?.() in Web Inspector.
 5. Test PayPal Help navigation/drawer without submitting a transaction.
@@ -63,4 +63,4 @@ If Safari becomes unstable, disable or uninstall com.custom.safari18stealth from
 - OS: iOS 16.2
 - Jailbreak: Dopamine RootHide
 - Package: com.custom.safari18stealth
-- Version: 2.1.2
+- Version: 2.2.0
