@@ -1,8 +1,8 @@
 Package: com.custom.safari18stealth
 Name: Safari18Stealth
-Version: 2.1.0
-Architecture: iphoneos-arm64
-Description: Conservative WebKit compatibility layer for Safari on iOS 16.2 (RootHide test candidate)
+Version: 2.1.1
+Architecture: iphoneos-arm64e
+Description: Safari-only WebKit compatibility layer for iOS 16.2 (RootHide)
 Maintainer: custom
 Author: custom
 Section: Tweaks
