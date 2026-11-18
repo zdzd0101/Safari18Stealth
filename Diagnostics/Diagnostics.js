@@ -56,7 +56,7 @@
       const entries = performance.getEntriesByType('resource') || [];
       for (let i = Math.max(0, entries.length - 160); i < entries.length && snapshot.messagingResources.length < 20; i++) {
         const entry = entries[i];
-        if (!/paypalobjects\\.com\\/messaging|paypal\\.com\\/.*messag/i.test(entry.name || '')) continue;
+        if (!/paypalobjects\.com\/messaging|paypal\.com\/.*messag/i.test(entry.name || '')) continue;
         let host = '', path = '';
         try { const u = new URL(entry.name, location.href); host = u.host; path = u.pathname; } catch (_) {}
         snapshot.messagingResources.push({host, path, initiator: String(entry.initiatorType || '').slice(0,24),
