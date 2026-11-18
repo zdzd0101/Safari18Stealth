@@ -90,4 +90,40 @@ if (!once.includes('height: 100vh') || !once.includes('height: 100dvh')) {
   throw new Error('STYLE fallback must preserve modern declaration');
 }
 if (result.errors.length) throw new Error(JSON.stringify(result.errors));
+
+const nativeObserved = [];
+class NativeMockMutationObserver {
+  constructor(callback) { this.callback = callback; }
+  observe(target, options) { nativeObserved.push({target, options}); }
+}
+class NativeMockStyleSheet {
+  insertRule(rule) { this.rule = rule; return 0; }
+}
+const nativeContext = vm.createContext({
+  document: {nodeType:9, querySelectorAll() { return []; }},
+  CSS: {supports(value) { return /100(dvh|svh|lvh)/.test(value); }},
+  MutationObserver: NativeMockMutationObserver,
+  CSSStyleSheet: NativeMockStyleSheet,
+  CSSStyleDeclaration: MockStyleDeclaration,
+  Reflect,
+  console
+});
+vm.runInContext(
+  "globalThis.__Safari18Stealth__ = {applied:[], skipped:[], errors:[], modules:{}, " +
+  "record(name,status,detail){this.modules[name]={status,detail:detail||null};}, " +
+  "fail(name,error){this.errors.push({module:name,message:String(error)});}};",
+  nativeContext
+);
+vm.runInContext(source, nativeContext);
+const nativeResult = vm.runInContext(
+  "({status:globalThis.__Safari18Stealth__.modules.css.status, " +
+  "skipped:globalThis.__Safari18Stealth__.skipped.slice(), " +
+  "wrapped:!!CSSStyleSheet.prototype.insertRule.__s18sWrapped})",
+  nativeContext
+);
+if (nativeResult.status !== 'skipped') throw new Error('native viewport support should skip fallback module');
+if (nativeObserved.length !== 0) throw new Error('native viewport support must not install document-wide MutationObserver');
+if (nativeResult.wrapped) throw new Error('native viewport support must not patch CSSOM methods');
+
+
 console.log('CSS compatibility tests passed, including observer idempotency');
