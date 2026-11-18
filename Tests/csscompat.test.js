@@ -15,7 +15,11 @@ class MockStyleDeclaration {
   constructor() { this.calls = []; }
   setProperty(property, value, priority) { this.calls.push([property, value, priority]); }
 }
-const document = { nodeType: 9, documentElement: null, querySelectorAll() { return []; } };
+const document = {
+  nodeType: 9,
+  documentElement: null,
+  querySelectorAll() { return []; }
+};
 const context = vm.createContext({
   document, MutationObserver: MockMutationObserver,
   CSSStyleSheet: MockStyleSheet, CSSStyleDeclaration: MockStyleDeclaration,
@@ -30,7 +34,8 @@ const result = vm.runInContext([
   " const style = new CSSStyleDeclaration(); style.setProperty('height', 'calc(100dvh - 12px)');",
   " return { rule: sheet.rule, calls: style.calls, errors: globalThis.__Safari18Stealth__.errors };",
   "})()"
-].join("\\n"), context);
+].join("\n"), context);
+
 if (!result.rule.includes('height: 100vh') || !result.rule.includes('height: 100dvh')) {
   throw new Error('insertRule should include vh fallback followed by modern unit');
 }
