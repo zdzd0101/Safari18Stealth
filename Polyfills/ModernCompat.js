@@ -97,6 +97,9 @@
   if (typeof Response !== 'undefined') define(Response.prototype, 'bytes', async function bytes() {
     return new Uint8Array(await this.arrayBuffer());
   }, 'Response');
+  if (typeof Request !== 'undefined') define(Request.prototype, 'bytes', async function bytes() {
+    return new Uint8Array(await this.arrayBuffer());
+  }, 'Request');
 
   // Declarative Shadow DOM: only process templates when the native parser did
   // not already consume them. This is a bounded one-time scan, not a page-wide observer.
@@ -224,6 +227,7 @@
     urlParse: typeof URL !== 'undefined' && typeof URL.parse === 'function',
     blobBytes: typeof Blob !== 'undefined' && typeof Blob.prototype.bytes === 'function',
     responseBytes: typeof Response !== 'undefined' && typeof Response.prototype.bytes === 'function',
+    requestBytes: typeof Request !== 'undefined' && typeof Request.prototype.bytes === 'function',
     nativePopover,
     declarativeShadowDOM: supportsDeclarativeShadowDOM,
     storageEstimate: !!(storageManager && typeof storageManager.estimate === 'function'),
