@@ -1,20 +1,8 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
-#import <objc/runtime.h>
-
-// 声明 WebKit 私有接口，彻底消除 ARC 编译报错
-@interface WKWebView (StealthPrivate)
-@property (nonatomic, copy, setter=_setCustomUserAgent:) NSString *_customUserAgent;
-@property (nonatomic, copy, setter=_setApplicationNameForUserAgent:) NSString *_applicationNameForUserAgent;
-@end
-
-@interface WKPreferences (StealthPrivate)
-@property (nonatomic, setter=_setAllowFileAccessFromFileURLs:) BOOL _allowFileAccessFromFileURLs;
-@end
 
 static NSString *const kStealthUA = @"Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1";
-static NSString *const kAppNameUA = @"Version/18.7 Mobile/15E148 Safari/604.1";
 
 static NSString *GetStealthEngineJS(void) {
     static NSString *js = nil;
@@ -26,7 +14,6 @@ static NSString *GetStealthEngineJS(void) {
         "  if (window.__wk18_loaded) return;"
         "  Object.defineProperty(window, '__wk18_loaded', { value: true, enumerable: false, configurable: false, writable: false });"
 
-        // 1. 原生代码签名保护器 ([native code])
         "  const nativeMap = new WeakMap();"
         "  const origToString = Function.prototype.toString;"
         "  const proxiedToString = new Proxy(origToString, {"
@@ -44,7 +31,6 @@ static NSString *GetStealthEngineJS(void) {
         "    Object.defineProperty(obj, prop, { value: fn, enumerable: false, configurable: true, writable: true });"
         "  }"
 
-        // 2. Navigator 核心指纹锁死（与 HTTP Header 100% 同步）
         "  const uaVal = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1';"
         "  const appVerVal = '5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1';"
         "  const getUA = function userAgent() { return uaVal; };"
@@ -56,7 +42,6 @@ static NSString *GetStealthEngineJS(void) {
         "    Object.defineProperty(Navigator.prototype, 'appVersion', { get: getAppVer, enumerable: true, configurable: true });"
         "  } catch (_) {}"
 
-        // 3. 补齐现代 JS 引擎标准库（防止 PayPal / 银行 React 19 前端崩溃白屏）
         "  defineNative(Object, 'hasOwn', function hasOwn(o, p) {"
         "    if (o == null) throw new TypeError('Cannot convert undefined or null to object');"
         "    return Object.prototype.hasOwnProperty.call(Object(o), p);"
@@ -90,7 +75,6 @@ static NSString *GetStealthEngineJS(void) {
         "    return (k < 0 || k >= len) ? undefined : this[k];"
         "  });"
 
-        // 4. 高性能现代 CSS 降级翻译器（零卡顿处理 dvh/svh、@layer 与 & 嵌套）
         "  function upgradeModernCSS(css) {"
         "    if (!css || typeof css !== 'string') return css;"
         "    let out = css;"
@@ -114,7 +98,6 @@ static NSString *GetStealthEngineJS(void) {
         "    return out;"
         "  }"
 
-        // 劫持动态插入的 CSS 规则（如 styled-components / Emotion / PayPal CSS-in-JS）
         "  const origInsertRule = CSSStyleSheet.prototype.insertRule;"
         "  const patchedInsertRule = function insertRule(rule, index) {"
         "    try { return origInsertRule.call(this, upgradeModernCSS(rule), index); }"
@@ -139,7 +122,6 @@ static NSString *GetStealthEngineJS(void) {
         "  });"
         "  observer.observe(document.documentElement, { childList: true, subtree: true });"
 
-        // 5. 修复 PayPal 英雄区隐身与 Help 抽屉弹窗层级
         "  window.addEventListener('DOMContentLoaded', () => {"
         "    const fix = document.createElement('style');"
         "    fix.textContent = 'main, [role=\"main\"], section, [data-testid*=\"hero\"], [class*=\"hero\"] { opacity: 1 !important; visibility: visible !important; } dialog[open], [role=\"dialog\"], [aria-modal=\"true\"], [class*=\"modal\"], [class*=\"drawer\"] { opacity: 1 !important; visibility: visible !important; z-index: 2147483647 !important; }';"
@@ -151,80 +133,62 @@ static NSString *GetStealthEngineJS(void) {
     return js;
 }
 
-static void ApplyStealthToWebView(WKWebView *webView) {
-    if (!webView) return;
-    WKUserContentController *ucc = webView.configuration.userContentController;
-    if (ucc) {
-        BOOL exists = NO;
-        for (WKUserScript *s in ucc.userScripts) {
-            if ([s.source containsString:@"__wk18_loaded"]) {
-                exists = YES;
-                break;
-            }
-        }
-        if (!exists) {
-            WKUserScript *script = [[WKUserScript alloc] initWithSource:GetStealthEngineJS()
-                                                          injectionTime:WKUserScriptInjectionTimeAtDocumentStart
-                                                       forMainFrameOnly:NO];
-            [ucc addUserScript:script];
-        }
-    }
-    webView.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
-    webView.customUserAgent = kStealthUA;
-    if ([webView respondsToSelector:@selector(_setCustomUserAgent:)]) {
-        [webView _setCustomUserAgent:kStealthUA];
-    }
-    if ([webView respondsToSelector:@selector(_setApplicationNameForUserAgent:)]) {
-        [webView _setApplicationNameForUserAgent:kAppNameUA];
-    }
+// 1. 仅在 Safari 与 WebContent 进程内部伪装系统版本号为 18.7，让 WebCore 自动生成 18_7 UA
+%hook UIDevice
+- (NSString *)systemVersion {
+    return @"18.7";
 }
+%end
 
+%hook NSProcessInfo
+- (NSOperatingSystemVersion)operatingSystemVersion {
+    NSOperatingSystemVersion ver = {18, 7, 0};
+    return ver;
+}
+- (NSString *)operatingSystemVersionString {
+    return @"Version 18.7 (Build 22H124)";
+}
+%end
+
+// 2. 劫持 WKUserContentController，无论系统怎么创建网页容器都强制注入垫片
+%hook WKUserContentController
+- (instancetype)init {
+    WKUserContentController *ucc = %orig;
+    if (ucc) {
+        WKUserScript *script = [[WKUserScript alloc] initWithSource:GetStealthEngineJS()
+                                                      injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                                   forMainFrameOnly:NO];
+        [ucc addUserScript:script];
+    }
+    return ucc;
+}
+%end
+
+// 3. 劫持私有初始化 _initWithFrame:configuration: 与公开初始化
 %hook WKWebView
-
-- (instancetype)initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
+- (instancetype)_initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
     WKWebView *wv = %orig;
-    ApplyStealthToWebView(wv);
+    if (wv) {
+        wv.customUserAgent = kStealthUA;
+        wv.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
+    }
     return wv;
 }
 
-- (WKNavigation *)loadRequest:(NSURLRequest *)request {
-    ApplyStealthToWebView(self);
-    if ([request isKindOfClass:[NSMutableURLRequest class]]) {
-        [(NSMutableURLRequest *)request setValue:kStealthUA forHTTPHeaderField:@"User-Agent"];
-    } else if (request) {
-        NSMutableURLRequest *mut = [request mutableCopy];
-        [mut setValue:kStealthUA forHTTPHeaderField:@"User-Agent"];
-        return %orig(mut);
+- (instancetype)initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
+    WKWebView *wv = %orig;
+    if (wv) {
+        wv.customUserAgent = kStealthUA;
+        wv.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
     }
-    return %orig;
+    return wv;
 }
 
 - (void)setCustomUserAgent:(NSString *)customUserAgent {
     %orig(kStealthUA);
 }
 
-- (void)_setCustomUserAgent:(NSString *)customUserAgent {
-    %orig(kStealthUA);
-}
-
-- (void)_setApplicationNameForUserAgent:(NSString *)applicationNameForUserAgent {
-    %orig(kAppNameUA);
-}
-
 - (NSString *)customUserAgent {
     return kStealthUA;
 }
-
-%end
-
-%hook NSMutableURLRequest
-
-- (void)setValue:(NSString *)value forHTTPHeaderField:(NSString *)field {
-    if ([field caseInsensitiveCompare:@"User-Agent"] == NSOrderedSame) {
-        %orig(kStealthUA, field);
-        return;
-    }
-    %orig;
-}
-
 %end
