@@ -39,14 +39,14 @@ static NSString *S18SReadResource(const char *resourceName) {
 }
 
 static NSString *S18SBuildBootstrap(void) {
+    // Serialize the complete one-time build. Marking the cache attempted before
+    // construction completed allowed a racing WKWebView init to cache a false nil.
     os_unfair_lock_lock(&S18SBootstrapLock);
     if (S18SBootstrapAttempted) {
         NSString *cached = S18SCachedBootstrap;
         os_unfair_lock_unlock(&S18SBootstrapLock);
         return cached;
     }
-    S18SBootstrapAttempted = YES;
-    os_unfair_lock_unlock(&S18SBootstrapLock);
 
     NSString *result = nil;
     @autoreleasepool {
@@ -71,8 +71,8 @@ static NSString *S18SBuildBootstrap(void) {
         }
     }
 
-    os_unfair_lock_lock(&S18SBootstrapLock);
     S18SCachedBootstrap = result;
+    S18SBootstrapAttempted = YES;
     os_unfair_lock_unlock(&S18SBootstrapLock);
     return result;
 }
