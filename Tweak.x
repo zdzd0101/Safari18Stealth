@@ -12,7 +12,7 @@ static NSString *GetStealthEngineJS(void) {
         js =
         @"(() => {"
         @"'use strict';"
-        @"if (window.__Safari18Stealth_v230) return;"
+        @"if (window.__Safari18Stealth_v240) return;"
         @"Object.defineProperty(window,'__Safari18Stealth_v230',{value:true,configurable:false});"
 
         // Keep native-looking function strings without replacing Function#toString itself.
@@ -58,6 +58,8 @@ static NSString *GetStealthEngineJS(void) {
           @"const av='5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1';"
           @"Object.defineProperty(nav,'userAgent',{get:()=>ua,configurable:true});"
           @"Object.defineProperty(nav,'appVersion',{get:()=>av,configurable:true});"
+          @"Object.defineProperty(nav,'language',{get:()=> 'en-US',configurable:true});"
+          @"Object.defineProperty(nav,'languages',{get:()=> ['en-US','en'],configurable:true});"
         @"}catch(_){}"
 
         // CSS compatibility: transform only the exact rule being inserted.
@@ -108,6 +110,17 @@ static NSString *GetStealthEngineJS(void) {
             @"if(cs.visibility==='hidden'&&d.getAttribute('aria-hidden')!=='true')d.style.setProperty('visibility','visible','important');"
           @"}}catch(_){}"
         @"};"
+        @"const stabilizeViewport=()=>{"
+          @"try{"
+            @"document.documentElement.style.setProperty('--s18-safe-height',window.innerHeight+'px');"
+            @"for(const el of document.querySelectorAll('[aria-hidden="true"][role="dialog"],dialog[open],[role=dialog][aria-modal="true"])){"
+              @"if((el.matches('dialog[open]')||el.getAttribute('aria-modal')==='true')&&el.getAttribute('aria-hidden')==='true')el.setAttribute('aria-hidden','false');"
+              @"if(el.hasAttribute('inert'))el.removeAttribute('inert');"
+            @"}"
+          @"}catch(_){}"
+        @"};"
+        @"if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',stabilizeViewport,{once:true});else stabilizeViewport();"
+        @"window.addEventListener('resize',stabilizeViewport,{passive:true});"
         @"if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',normalizeDialogs,{once:true});"
         @"else normalizeDialogs();"
 
