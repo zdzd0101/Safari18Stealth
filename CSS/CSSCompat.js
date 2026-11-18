@@ -19,8 +19,17 @@
   const viewportPattern = /(^|[;{]\s*)([a-zA-Z-]+\s*:\s*)([^;{}]*?)(\b(?:\d*\.)?\d+(?:dvh|svh|lvh)\b)(\s*!important)?(?=\s*[;}])/gi;
   const convertViewportUnits = cssText => {
     if (typeof cssText !== 'string' || !/(?:dvh|svh|lvh)\b/i.test(cssText)) return cssText;
-    return cssText.replace(viewportPattern, (whole, prefix, declaration, before, unit, important) => {
+    return cssText.replace(viewportPattern, (whole, prefix, declaration, before, unit, important, offset, source) => {
+      const property = declaration.slice(0, declaration.indexOf(':')).trim().toLowerCase();
       const fallback = unit.replace(/(?:dvh|svh|lvh)$/i, 'vh');
+      const preceding = source.slice(0, offset);
+      const boundary = Math.max(preceding.lastIndexOf(';'), preceding.lastIndexOf('{'));
+      const previous = preceding.slice(boundary + 1).trim();
+      const colon = previous.indexOf(':');
+      const previousProperty = colon < 0 ? '' : previous.slice(0, colon).trim().toLowerCase();
+      const previousValue = colon < 0 ? '' : previous.slice(colon + 1).trim();
+      const expected = (before + fallback + (important || '')).trim();
+      if (previousProperty === property && previousValue === expected) return whole;
       return prefix + declaration + before + fallback + (important || '') + ';' +
         declaration + before + unit + (important || '');
     });
