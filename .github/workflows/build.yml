@@ -1,0 +1,110 @@
+name: Safari18Stealth RootHide build (Ubuntu)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+      - release/3.3-final-clean
+  push:
+    branches:
+      - main
+      - release/2.2.0-final
+      - release/3.3-final-clean
+      - fix/2.2.0-arm64e-init-crash
+
+permissions:
+  contents: read
+
+concurrency:
+  group: safari18stealth-roothide-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and verify Safari-only RootHide DEB on Ubuntu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      THEOS: ${{ github.workspace }}/theos
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential clang make perl git curl ca-certificates dpkg-dev nodejs python3
+      - name: Install RootHide Theos and verify toolchain
+        run: |
+          set -euxo pipefail
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"
+          test -d "$THEOS/makefiles"
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+      - name: Verify source layout, Safari-only filter and native source safety
+        run: |
+          set -euxo pipefail
+          test -f Makefile
+          test -f Tweak.x
+          test -f Safari18Stealth.plist
+          test -f control
+          test -f Engine/Bootstrap.js
+          test -f Polyfills/Polyfills.js
+          test -f CSS/CSSCompat.js
+          test -f Diagnostics/Diagnostics.js
+          python3 - <<'PY'
+          import plistlib
+          with open('Safari18Stealth.plist', 'rb') as f:
+              data = plistlib.load(f)
+          assert data['Filter']['Bundles'] == ['com.apple.mobilesafari']
+          print('Safari-only injection filter verified')
+          PY
+          python3 Tests/native_safety.test.py
+      - name: Verify JavaScript syntax and tests
+        run: |
+          set -euxo pipefail
+          node --version
+          node --check Engine/Bootstrap.js
+          node --check Polyfills/Polyfills.js
+          node --check CSS/CSSCompat.js
+          node --check Diagnostics/Diagnostics.js
+          node Tests/polyfills.test.js
+          node Tests/csscompat.test.js
+          node Tests/runtime.test.js
+      - name: Build RootHide package
+        run: |
+          set -euxo pipefail
+          make clean
+          make package THEOS_PACKAGE_SCHEME=roothide FINALPACKAGE=1
+      - name: Verify package metadata, runtime resources and Mach-O
+        run: |
+          set -euxo pipefail
+          DEB="$(find packages -maxdepth 1 -name '*.deb' -print -quit)"
+          test -n "$DEB"
+          dpkg-deb --info "$DEB"
+          test "$(dpkg-deb -f "$DEB" Package)" = "com.custom.safari18stealth"
+          test "$(dpkg-deb -f "$DEB" Architecture)" = "iphoneos-arm64e"
+          test "$(dpkg-deb -f "$DEB" Version)" = "3.3.0"
+          dpkg-deb --contents "$DEB" | tee package-files.txt
+          grep -F 'Safari18Stealth.dylib' package-files.txt
+          grep -F 'Safari18Stealth.plist' package-files.txt
+          grep -F 'Safari18Stealth/Bootstrap.js' package-files.txt
+          grep -F 'Safari18Stealth/Polyfills.js' package-files.txt
+          grep -F 'Safari18Stealth/CSSCompat.js' package-files.txt
+          grep -F 'Safari18Stealth/Diagnostics.js' package-files.txt
+          mkdir extracted
+          dpkg-deb -x "$DEB" extracted
+          DYLIB="$(find extracted -type f -name 'Safari18Stealth.dylib' -print -quit)"
+          test -n "$DYLIB"
+          file "$DYLIB"
+          python3 Tests/native_safety.test.py --binary "$DYLIB"
+          sha256sum "$DEB" "$DYLIB" | tee build-metadata.txt
+      - name: Upload installable package and verification metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: Safari18Stealth-3.3.0-RootHide-iphoneos-arm64e
+          path: |
+            packages/*.deb
+            build-metadata.txt
+            package-files.txt
+          if-no-files-found: error
+          retention-days: 30
