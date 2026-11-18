@@ -68,11 +68,13 @@ jobs:
           node --check Engine/Bootstrap.js
           node --check Polyfills/Polyfills.js
           node --check Polyfills/ModernCompat.js
+          node --check Tests/modern_compat.test.js
           node --check CSS/CSSCompat.js
           node --check Diagnostics/Diagnostics.js
           node Tests/polyfills.test.js
           node Tests/csscompat.test.js
           node Tests/runtime.test.js
+          node Tests/modern_compat.test.js
       - name: Build RootHide package
         run: |
           set -euxo pipefail
@@ -86,7 +88,7 @@ jobs:
           dpkg-deb --info "$DEB"
           test "$(dpkg-deb -f "$DEB" Package)" = "com.custom.safari18stealth"
           test "$(dpkg-deb -f "$DEB" Architecture)" = "iphoneos-arm64e"
-          test "$(dpkg-deb -f "$DEB" Version)" = "3.3.0"
+          test "$(dpkg-deb -f "$DEB" Version)" = "4.0.0"
           dpkg-deb --contents "$DEB" | tee package-files.txt
           grep -F 'Safari18Stealth.dylib' package-files.txt
           grep -F 'Safari18Stealth.plist' package-files.txt
@@ -105,7 +107,7 @@ jobs:
       - name: Upload installable package and verification metadata
         uses: actions/upload-artifact@v4
         with:
-          name: Safari18Stealth-3.3.0-RootHide-iphoneos-arm64e
+          name: Safari18Stealth-4.0.0-RootHide-iphoneos-arm64e
           path: |
             packages/*.deb
             build-metadata.txt
