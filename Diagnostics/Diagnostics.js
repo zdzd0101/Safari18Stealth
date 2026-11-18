@@ -11,6 +11,8 @@
   const longTasks = [];
   const layoutShifts = [];
   const resources = [];
+  const lifecycle = [];
+  const policyViolations = [];
   const pushBounded = (array, value, limit) => {
     array.push(value);
     if (array.length > limit) array.shift();
@@ -22,6 +24,76 @@
   const safeHost = name => {
     try { return new URL(name, location.href).host; } catch (_) { return ''; }
   };
+  const safeMessage = value => String(value || 'unknown')
+    .replace(/https?:\\/\\/[^\\s)]+/gi, raw => {
+      try { const u = new URL(raw); return u.origin + u.pathname; } catch (_) { return '[url]'; }
+    })
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, '[email]')
+    .slice(0, 200);
+
+  // Snapshot-only PayPal/chat diagnostics: no network interception, DOM mutation,
+  // SDK method calls, page text, cookies, headers, request bodies or query strings.
+  const paypalChatSnapshot = () => {
+    const snapshot = {
+      nodeChat: { exists: false, type: 'undefined' },
+      messagingScripts: [], messagingResources: [],
+      frames: 0, shadowRoots: 0, chatLikeNodes: [], popovers: [], dialogs: []
+    };
+    try {
+      const chat = globalThis.nodeChat;
+      snapshot.nodeChat.exists = typeof chat !== 'undefined' && chat !== null;
+      snapshot.nodeChat.type = chat === null ? 'null' : typeof chat;
+    } catch (_) {}
+    try {
+      const scripts = document.scripts || [];
+      for (let i = 0; i < scripts.length && snapshot.messagingScripts.length < 12; i++) {
+        const src = scripts[i].src || '';
+        if (!/paypalobjects\\.com\\/messaging|paypal\\.com\\/.*messag/i.test(src)) continue;
+        try { const u = new URL(src, location.href); snapshot.messagingScripts.push({host:u.host, path:u.pathname}); } catch (_) {}
+      }
+    } catch (_) {}
+    try {
+      const entries = performance.getEntriesByType('resource') || [];
+      for (let i = Math.max(0, entries.length - 160); i < entries.length && snapshot.messagingResources.length < 20; i++) {
+        const entry = entries[i];
+        if (!/paypalobjects\\.com\\/messaging|paypal\\.com\\/.*messag/i.test(entry.name || '')) continue;
+        let host = '', path = '';
+        try { const u = new URL(entry.name, location.href); host = u.host; path = u.pathname; } catch (_) {}
+        snapshot.messagingResources.push({host, path, initiator: String(entry.initiatorType || '').slice(0,24),
+          durationMs: Math.round(entry.duration || 0), transferBytes: entry.transferSize || 0,
+          decodedBytes: entry.decodedBodySize || 0,
+          responseStatus: Number.isFinite(entry.responseStatus) ? entry.responseStatus : null});
+      }
+    } catch (_) {}
+    try {
+      const all = document.querySelectorAll ? document.querySelectorAll('*') : [];
+      const candidates = [];
+      for (let i = 0; i < all.length && i < 240; i++) {
+        const el = all[i];
+        try { if (el.shadowRoot) snapshot.shadowRoots++; } catch (_) {}
+        if (snapshot.frames < 30 && String(el.tagName || '').toLowerCase() === 'iframe') snapshot.frames++;
+        if (candidates.length < 40) {
+          const tag = String(el.tagName || '').toLowerCase();
+          const id = String(el.id || '').toLowerCase();
+          const cls = typeof el.className === 'string' ? el.className.toLowerCase() : '';
+          const role = String(el.getAttribute && el.getAttribute('role') || '').toLowerCase();
+          const popover = el.hasAttribute && el.hasAttribute('popover');
+          if (/chat|messag|support|help.?center/.test(id + ' ' + cls) || popover || role === 'dialog' || role === 'alertdialog') {
+            let visible = null;
+            try { const style = getComputedStyle(el); visible = !el.hidden && style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) !== 0; } catch (_) {}
+            const item = {tag, role: role || null, visible, hidden: !!el.hidden, ariaHidden: el.getAttribute && el.getAttribute('aria-hidden'), hasShadowRoot: !!el.shadowRoot};
+            if (/chat|messag|support|help.?center/.test(id + ' ' + cls)) snapshot.chatLikeNodes.push(item);
+            if (popover) snapshot.popovers.push({open: el.hasAttribute('data-s18s-popover-open') || !el.hidden, type: el.getAttribute('popover') || 'auto', visible});
+            if (role === 'dialog' || role === 'alertdialog') snapshot.dialogs.push(item);
+          }
+        }
+      }
+      snapshot.chatLikeNodes = snapshot.chatLikeNodes.slice(0, 12);
+      snapshot.popovers = snapshot.popovers.slice(0, 12);
+      snapshot.dialogs = snapshot.dialogs.slice(0, 12);
+    } catch (_) {}
+    return snapshot;
+  };
 
   // Collect low-volume, bounded diagnostics only in the top-level page.
   // No resource URLs, query strings, form values, or page text are retained.
@@ -29,7 +101,7 @@
     addEventListener('error', event => {
       pushBounded(errors, {
         type: 'error',
-        message: String(event && event.message || 'script/resource error').slice(0, 240),
+        message: safeMessage(event && event.message || 'script/resource error'),
         time: Math.round(performance.now())
       }, MAX_ERRORS);
     }, true);
@@ -38,9 +110,22 @@
       const reason = event && event.reason;
       pushBounded(errors, {
         type: 'unhandledrejection',
-        message: String(reason && reason.message || reason || 'unhandled rejection').slice(0, 240),
+        message: safeMessage(reason && reason.message || reason || 'unhandled rejection'),
         time: Math.round(performance.now())
       }, MAX_ERRORS);
+    });
+
+    const recordLifecycle = type => pushBounded(lifecycle, {type, time:Math.round(performance.now()),
+      visibility: typeof document !== 'undefined' ? document.visibilityState || 'unknown' : 'unknown'}, 24);
+    ['pageshow','pagehide','focus','blur','online','offline'].forEach(type => addEventListener(type, () => recordLifecycle(type)));
+    if (typeof document !== 'undefined' && document.addEventListener) {
+      document.addEventListener('visibilitychange', () => recordLifecycle('visibilitychange'));
+    }
+    addEventListener('securitypolicyviolation', event => {
+      let blockedHost = '';
+      try { blockedHost = event.blockedURI && event.blockedURI !== 'inline' && event.blockedURI !== 'eval' ? safeHost(event.blockedURI) : ''; } catch (_) {}
+      pushBounded(policyViolations, {directive:String(event.effectiveDirective || '').slice(0,80),
+        blockedHost, disposition:String(event.disposition || '').slice(0,24), time:Math.round(performance.now())}, 20);
     });
 
     if (typeof PerformanceObserver === 'function') {
@@ -130,7 +215,10 @@
           arrayToSpliced: typeof Array.prototype.toSpliced === 'function',
           arrayWith: typeof Array.prototype.with === 'function'
         }, state.capabilities || {}),
-        performance: performanceReport()
+        performance: performanceReport(),
+        paypalChat: paypalChatSnapshot(),
+        pageLifecycle: lifecycle.slice(-16),
+        contentSecurityPolicy: policyViolations.slice(-12)
       }),
       enumerable: true, configurable: false, writable: false
     });
@@ -150,7 +238,7 @@
       },
       enumerable: true, configurable: false, writable: false
     });
-    state.record('diagnostics', 'applied', 'bounded top-frame runtime, resource, long-task and layout-shift diagnostics');
+    state.record('diagnostics', 'applied', 'bounded runtime/performance diagnostics plus read-only chat SDK, DOM, frame, popover, CSP and page-lifecycle snapshots');
   } catch (error) {
     state.fail('diagnostics', error);
   }
