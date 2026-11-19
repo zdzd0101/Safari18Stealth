@@ -11,8 +11,9 @@
     CSS.supports('height: 100svh') &&
     CSS.supports('height: 100lvh');
   if (nativeViewportUnits) {
-    state.record('css', 'skipped', 'native dvh/svh/lvh support; no fallback hooks installed');
-    state.skipped.push('native-viewport-units', 'private-webkit-apis', 'global-modal-forcing', 'css-parser-rewrite');
+    state.record('css', 'native', 'native dvh/svh/lvh support detected; no fallback hooks or CSSOM wrappers installed');
+    state.record('css.viewport-units', 'native', 'dvh/svh/lvh are natively supported by this WebKit');
+    state.skipped.push('private-webkit-apis', 'global-modal-forcing', 'css-parser-rewrite');
     return;
   }
 
@@ -118,6 +119,7 @@
     patchMethod(sheetProto, 'replace');
     patchSetProperty();
     state.record('css', 'applied', 'legacy viewport-unit fallback with idempotent style processing');
+    state.record('css.viewport-units', 'limited', 'legacy vh fallback added while preserving modern declarations');
   } catch (error) {
     state.fail('css', error);
   }

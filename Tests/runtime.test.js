@@ -27,6 +27,10 @@ const result = vm.runInContext(`(() => {
   if (!test.ok) throw new Error(JSON.stringify(test));
   if (!report.paypalChat || !report.paypalChat.nodeChat || report.paypalChat.frames !== 0) throw new Error('chat diagnostic snapshot missing');
   if (!Array.isArray(report.pageLifecycle) || !Array.isArray(report.contentSecurityPolicy) || !Array.isArray(report.crossOriginMessages)) throw new Error('lifecycle/CSP/message diagnostics missing');
+  if (!Array.isArray(report.resourceLoadErrors) || !Array.isArray(report.performance.resourceLoadErrors)) throw new Error('subresource load-error diagnostics missing');
+  if (!Array.isArray(report.native)) throw new Error('native capability classification missing');
+  if (!report.paypalPage || typeof report.paypalPage.isPayPal !== 'boolean') throw new Error('PayPal page-state diagnostics missing');
+  if (!Object.prototype.hasOwnProperty.call(report.performance.resources, 'zeroTransferMetadata') || Object.prototype.hasOwnProperty.call(report.performance.resources, 'failedOrOpaque')) throw new Error('resource timing metadata classification is unsafe');
   if (new Set([1,2]).difference(new Set([2])).size !== 1) throw new Error('Set.difference polyfill');
   if (typeof URL.parse !== 'function' || URL.parse('invalid') !== null) throw new Error('URL.parse compatibility');
   return {version: report.version, modules: Object.keys(report.modules).length};

@@ -11,9 +11,11 @@
   const longTasks = [];
   const layoutShifts = [];
   const resources = [];
+  const resourceLoadErrors = [];
   const lifecycle = [];
   const policyViolations = [];
   const crossOriginMessages = [];
+  const recentInteractions = [];
   const pushBounded = (array, value, limit) => {
     array.push(value);
     if (array.length > limit) array.shift();
@@ -63,7 +65,8 @@
         snapshot.messagingResources.push({host, path, initiator: String(entry.initiatorType || '').slice(0,24),
           durationMs: Math.round(entry.duration || 0), transferBytes: entry.transferSize || 0,
           decodedBytes: entry.decodedBodySize || 0,
-          responseStatus: Number.isFinite(entry.responseStatus) ? entry.responseStatus : null});
+          responseStatus: Number.isFinite(entry.responseStatus) ? entry.responseStatus : null,
+          transferMetadataZero: (entry.transferSize || 0) === 0 && (entry.decodedBodySize || 0) === 0});
       }
     } catch (_) {}
     try {
@@ -96,6 +99,66 @@
     return snapshot;
   };
 
+  // PayPal page-state snapshot: structural and computed-style metadata only.
+  // Never collect labels, text, form values, credentials, tokens, or account data.
+  const paypalPageSnapshot = () => {
+    const result = {
+      isPayPal: false, readyState: null, viewport: null, typography: null,
+      busyIndicators: 0, disabledControls: 0, forms: 0, frames: 0,
+      visibleDialogs: 0, scripts: [], recentInteractions: recentInteractions.slice(-8)
+    };
+    try {
+      const host = String(location.hostname || '').toLowerCase();
+      result.isPayPal = host === 'paypal.com' || host.endsWith('.paypal.com');
+      if (!result.isPayPal) return result;
+      result.readyState = document.readyState;
+      const viewport = document.querySelector('meta[name="viewport"]');
+      result.viewport = viewport ? String(viewport.getAttribute('content') || '').slice(0, 160) : null;
+      const rootStyle = getComputedStyle(document.documentElement);
+      const bodyStyle = document.body ? getComputedStyle(document.body) : null;
+      result.typography = {
+        rootFontSize: rootStyle.fontSize || null,
+        bodyFontSize: bodyStyle && bodyStyle.fontSize || null,
+        rootTextSizeAdjust: rootStyle.webkitTextSizeAdjust || rootStyle.textSizeAdjust || null,
+        bodyTextSizeAdjust: bodyStyle && (bodyStyle.webkitTextSizeAdjust || bodyStyle.textSizeAdjust) || null,
+        devicePixelRatio: Number.isFinite(devicePixelRatio) ? devicePixelRatio : null
+      };
+      result.busyIndicators = document.querySelectorAll('[aria-busy="true"],[role="progressbar"],.spinner,[class*="spinner"],[class*="loading"]').length;
+      result.disabledControls = document.querySelectorAll('button:disabled,input:disabled,select:disabled,textarea:disabled,[aria-disabled="true"]').length;
+      result.forms = document.forms ? document.forms.length : 0;
+      result.frames = document.querySelectorAll('iframe').length;
+      result.visibleDialogs = Array.from(document.querySelectorAll('[role="dialog"],[role="alertdialog"],dialog')).filter(el => {
+        try { const st = getComputedStyle(el); return !el.hidden && st.display !== 'none' && st.visibility !== 'hidden'; } catch (_) { return false; }
+      }).length;
+      for (const script of Array.from(document.scripts || []).slice(-80)) {
+        if (result.scripts.length >= 20) break;
+        try {
+          const url = new URL(script.src, location.href);
+          if (script.src) result.scripts.push({host:url.host, path:url.pathname});
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return result;
+  };
+
+  // Record only the shape/state of user interactions, never text or form data.
+  if (topFrame && typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('click', event => {
+      const target = event && event.target && event.target.closest ?
+        event.target.closest('button,a,input,[role="button"],[role="link"]') : null;
+      if (!target) return;
+      let rect = null;
+      try { const r = target.getBoundingClientRect(); rect = {width:Math.round(r.width),height:Math.round(r.height)}; } catch (_) {}
+      pushBounded(recentInteractions, {
+        tag:String(target.tagName || '').toLowerCase(),
+        role:target.getAttribute('role') || null,
+        disabled:!!target.disabled || target.getAttribute('aria-disabled') === 'true',
+        visible:!!(rect && rect.width > 0 && rect.height > 0),
+        rect, time:Math.round(performance.now())
+      }, 20);
+    }, true);
+  }
+
   // Collect low-volume, bounded diagnostics only in the top-level page.
   // No resource URLs, query strings, form values, or page text are retained.
   if (topFrame && typeof addEventListener === 'function') {
@@ -115,6 +178,24 @@
         time: Math.round(performance.now())
       }, MAX_ERRORS);
     });
+
+    // Capture failed subresource load events without wrapping fetch/XHR or
+    // reading request headers, cookies, bodies, or full URLs.
+    addEventListener('error', event => {
+      const target = event && event.target;
+      const tag = String(target && target.tagName || '').toLowerCase();
+      if (!['script', 'link', 'iframe'].includes(tag)) return;
+      let host = '', path = '';
+      try {
+        const raw = tag === 'link' ? target.href : target.src;
+        const url = new URL(raw || '', location.href);
+        host = url.host;
+        path = url.pathname;
+      } catch (_) {}
+      pushBounded(resourceLoadErrors, {
+        tag, host, path, time: Math.round(performance.now())
+      }, 30);
+    }, true);
 
     const recordLifecycle = type => pushBounded(lifecycle, {type, time:Math.round(performance.now()),
       visibility: typeof document !== 'undefined' ? document.visibilityState || 'unknown' : 'unknown'}, 24);
@@ -167,7 +248,8 @@
         start: Math.round(entry.startTime),
         duration: Math.round(entry.duration),
         transferBytes: entry.transferSize || 0,
-        decodedBytes: entry.decodedBodySize || 0
+        decodedBytes: entry.decodedBodySize || 0,
+        responseStatus: Number.isFinite(entry.responseStatus) ? entry.responseStatus : null
       }, MAX_RESOURCES));
     }
   }
@@ -175,9 +257,16 @@
   const performanceReport = () => {
     const navigation = performance.getEntriesByType('navigation')[0];
     const resourceEntries = performance.getEntriesByType('resource');
-    const resourceTotals = {count:resourceEntries.length, failedOrOpaque:0, transferBytes:0};
+    const resourceTotals = {count:resourceEntries.length, zeroTransferMetadata:0, httpErrorStatuses:0, statusMetadataUnavailable:0, transferBytes:0};
     for (const entry of resourceEntries) {
-      if (entry.transferSize === 0 && entry.decodedBodySize === 0) resourceTotals.failedOrOpaque++;
+      // Zero transfer/decoded sizes are not proof of failure: cross-origin
+      // timing restrictions and cache behavior can hide these values.
+      if ((entry.transferSize || 0) === 0 && (entry.decodedBodySize || 0) === 0) resourceTotals.zeroTransferMetadata++;
+      if (Number.isFinite(entry.responseStatus)) {
+        if (entry.responseStatus >= 400) resourceTotals.httpErrorStatuses++;
+      } else {
+        resourceTotals.statusMetadataUnavailable++;
+      }
       resourceTotals.transferBytes += entry.transferSize || 0;
     }
     return {
@@ -192,6 +281,7 @@
       longTasks: {count:longTasks.length, maxMs:longTasks.reduce((m,x)=>Math.max(m,x.duration),0), recent:longTasks.slice(-12)},
       layoutShifts: {count:layoutShifts.length, total:Math.round(layoutShifts.reduce((s,x)=>s+x.value,0)*10000)/10000, recent:layoutShifts.slice(-12)},
       recentResources: resources.slice(-20),
+      resourceLoadErrors: resourceLoadErrors.slice(-20),
       runtimeErrors: errors.slice(-20),
       memory: performance.memory ? {
         usedBytes: performance.memory.usedJSHeapSize,
@@ -210,6 +300,7 @@
         modules: JSON.parse(JSON.stringify(state.modules)),
         applied: state.applied.slice(),
         skipped: state.skipped.slice(),
+        native: (state.native || Object.keys(state.modules).filter(name => state.modules[name] && state.modules[name].status === 'native')).slice(),
         errors: state.errors.slice(),
         capabilities: Object.assign({
           objectHasOwn: typeof Object.hasOwn === 'function',
@@ -225,6 +316,8 @@
         }, state.capabilities || {}),
         performance: performanceReport(),
         paypalChat: paypalChatSnapshot(),
+        paypalPage: paypalPageSnapshot(),
+        resourceLoadErrors: resourceLoadErrors.slice(-20),
         pageLifecycle: lifecycle.slice(-16),
         contentSecurityPolicy: policyViolations.slice(-12),
         crossOriginMessages: crossOriginMessages.slice(-20)
@@ -241,13 +334,16 @@
         check('Promise', () => Promise.resolve(1) instanceof Promise);
         check('performance-report', () => {
           const report = performanceReport();
-          return !!report && Array.isArray(report.recentResources) && Array.isArray(report.runtimeErrors);
+          return !!report && Array.isArray(report.recentResources) && Array.isArray(report.runtimeErrors) &&
+            Array.isArray(report.resourceLoadErrors) &&
+            Object.prototype.hasOwnProperty.call(report.resources, 'zeroTransferMetadata') &&
+            !Object.prototype.hasOwnProperty.call(report.resources, 'failedOrOpaque');
         });
         return {ok:checks.every(x=>x.ok), checks};
       },
       enumerable: true, configurable: false, writable: false
     });
-    state.record('diagnostics', 'applied', 'bounded runtime/performance diagnostics plus read-only chat SDK, DOM, frame, popover, CSP, cross-origin message metadata and page-lifecycle snapshots');
+    state.record('diagnostics', 'applied', 'bounded runtime/performance diagnostics, captured script/link/iframe load errors, and read-only chat SDK, DOM, frame, popover, CSP, cross-origin message metadata and page-lifecycle snapshots');
   } catch (error) {
     state.fail('diagnostics', error);
   }

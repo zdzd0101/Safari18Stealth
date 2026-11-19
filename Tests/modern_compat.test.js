@@ -24,8 +24,8 @@ const context = vm.createContext({
 vm.runInContext(`
   for (const key of ['difference','intersection','union','symmetricDifference','isSubsetOf','isSupersetOf','isDisjointFrom']) delete Set.prototype[key];
   delete URL.parse;
-  globalThis.__Safari18Stealth__ = {applied:[], skipped:[], errors:[], modules:Object.create(null),
-    record(name,status,detail){this.modules[name]={status,detail:detail||null};},
+  globalThis.__Safari18Stealth__ = {applied:[], skipped:[], native:[], errors:[], modules:Object.create(null),
+    record(name,status,detail){this.modules[name]={status,detail:detail||null}; if(status==='native') this.native.push(name); if(status==='applied') this.applied.push(name); if(status==='skipped') this.skipped.push(name);},
     fail(name,error){this.errors.push({module:name,message:String(error)});}};
 `, context);
 vm.runInContext(source, context);
