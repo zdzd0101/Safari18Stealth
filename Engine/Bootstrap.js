@@ -9,12 +9,14 @@
     modules: Object.create(null),
     applied: [],
     skipped: [],
+    native: [],
     errors: []
   };
   state.record = (name, status, detail) => {
     state.modules[name] = { status, detail: detail || null };
     if (status === 'applied') state.applied.push(name);
     if (status === 'skipped') state.skipped.push(name);
+    if (status === 'native') state.native.push(name);
   };
   state.fail = (module, error) => {
     state.errors.push({ module, message: error && error.message ? String(error.message) : String(error) });
