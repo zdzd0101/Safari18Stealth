@@ -4,8 +4,12 @@
   if (!state) return;
   const has = (object, key) => object != null && key in object;
   const define = (target, key, value, moduleName) => {
-    if (!target || key in target) {
+    if (!target) {
       state.skipped.push(moduleName + '.' + key);
+      return false;
+    }
+    if (key in target) {
+      record(moduleName + '.' + key, 'native', 'native implementation detected; no polyfill installed');
       return false;
     }
     try {
@@ -115,7 +119,7 @@
   })();
   const installDeclarativeShadowDOMFallback = () => {
     if (supportsDeclarativeShadowDOM || !document.querySelectorAll) {
-      record('declarative-shadow-dom', 'skipped', 'native parser support detected or DOM unavailable');
+      record('declarative-shadow-dom', supportsDeclarativeShadowDOM ? 'native' : 'unsupported', supportsDeclarativeShadowDOM ? 'native parser consumed declarative shadow root; no fallback installed' : 'DOM unavailable; no fallback installed');
       return;
     }
     let attached = 0;
@@ -232,17 +236,20 @@
     }, true);
     record('popover', 'applied', 'API and popovertarget invoker fallback; no native top layer or complete focus/event semantics');
   } else {
-    record('popover', 'skipped', 'native popover support detected');
+    record('popover', 'native', 'native Popover API detected; no fallback installed');
   }
 
   // Storage quota and persistence policy are browser-managed. Do not fabricate
   // estimate()/persist() results on engines that do not expose them.
   const storageManager = typeof navigator !== 'undefined' ? navigator.storage : null;
-  record('storage-api', storageManager && typeof storageManager.estimate === 'function' &&
-    typeof storageManager.persist === 'function' ? 'skipped' : 'limited',
-    storageManager && typeof storageManager.estimate === 'function' ?
-      'native storage manager detected; quota and eviction remain WebKit-controlled' :
-      'no quota/persistence shim installed because synthetic values would be misleading');
+  const storageEstimateNative = !!(storageManager && typeof storageManager.estimate === 'function');
+  const storagePersistNative = !!(storageManager && typeof storageManager.persist === 'function');
+  const storagePersistedNative = !!(storageManager && typeof storageManager.persisted === 'function');
+  record('storage-estimate', storageEstimateNative ? 'native' : 'unsupported', storageEstimateNative ? 'native StorageManager.estimate detected' : 'not exposed by this WebKit; no synthetic quota values');
+  record('storage-persist', storagePersistNative ? 'native' : 'unsupported', storagePersistNative ? 'native StorageManager.persist detected' : 'not exposed by this WebKit; no synthetic permission result');
+  record('storage-persisted', storagePersistedNative ? 'native' : 'unsupported', storagePersistedNative ? 'native StorageManager.persisted detected' : 'not exposed by this WebKit; no synthetic persistence state');
+  record('storage-api', storageEstimateNative && storagePersistNative && storagePersistedNative ? 'native' : 'limited',
+    'native StorageManager methods are reported individually; quota and eviction remain WebKit-controlled');
 
   // View Transitions and modern CSS depend on rendering-engine primitives.
   // Never create a fake startViewTransition() or rewrite arbitrary CSS text.
@@ -253,10 +260,13 @@
     hasSelector: CSS.supports('selector(:has(*))'),
     colorMix: CSS.supports('color: color-mix(in srgb, red, blue)')
   } : {};
-  record('view-transitions', typeof document !== 'undefined' &&
-    typeof document.startViewTransition === 'function' ? 'skipped' : 'limited',
-    'native rendering snapshots cannot be polyfilled; callers must retain a non-transition path');
-  record('modern-css', 'limited', 'feature detection only; unsupported layout/rendering primitives are not text-rewritten');
+  const nativeViewTransitions = typeof document !== 'undefined' && typeof document.startViewTransition === 'function';
+  record('view-transitions', nativeViewTransitions ? 'native' : 'unsupported',
+    nativeViewTransitions ? 'native View Transitions API detected; no shim installed' : 'native rendering snapshots cannot be polyfilled; callers must retain a non-transition path');
+  for (const [feature, supported] of Object.entries(css)) {
+    record('css.' + feature, supported ? 'native' : 'unsupported', supported ? 'CSS.supports reports native support' : 'CSS.supports reports unsupported; no rendering-engine shim installed');
+  }
+  record('modern-css', 'limited', 'per-feature native support is recorded; unsupported layout/rendering primitives are not text-rewritten');
   record('modern-compat', 'applied', 'capability-gated compatibility checks and limited fallbacks initialized');
   state.capabilities = Object.assign(state.capabilities || {}, {
     setMethods: Object.keys(setMethods).reduce((all, key) => { all[key] = typeof Set.prototype[key] === 'function'; return all; }, {}),
@@ -267,10 +277,10 @@
     pushMessageDataBytes: typeof PushMessageData !== 'undefined' && typeof PushMessageData.prototype.bytes === 'function',
     nativePopover,
     declarativeShadowDOM: supportsDeclarativeShadowDOM,
-    storageEstimate: !!(storageManager && typeof storageManager.estimate === 'function'),
-    storagePersist: !!(storageManager && typeof storageManager.persist === 'function'),
-    storagePersisted: !!(storageManager && typeof storageManager.persisted === 'function'),
-    viewTransitions: typeof document !== 'undefined' && typeof document.startViewTransition === 'function',
+    storageEstimate: storageEstimateNative,
+    storagePersist: storagePersistNative,
+    storagePersisted: storagePersistedNative,
+    viewTransitions: nativeViewTransitions,
     css
   });
 })();
