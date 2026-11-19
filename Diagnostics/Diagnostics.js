@@ -239,6 +239,7 @@
         modules: JSON.parse(JSON.stringify(state.modules)),
         applied: state.applied.slice(),
         skipped: state.skipped.slice(),
+        native: (state.native || Object.keys(state.modules).filter(name => state.modules[name] && state.modules[name].status === 'native')).slice(),
         errors: state.errors.slice(),
         capabilities: Object.assign({
           objectHasOwn: typeof Object.hasOwn === 'function',
