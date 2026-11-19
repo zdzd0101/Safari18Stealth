@@ -140,9 +140,9 @@
         state.errors.push({ module: 'declarative-shadow-dom', message: String(error) });
       }
     }
-    record('declarative-shadow-dom', attached ? 'applied' : 'skipped',
+    record('declarative-shadow-dom', attached ? 'applied' : 'limited',
       attached ? 'attached ' + attached + ' declarative shadow root(s); parser timing/serialization options are not emulated' :
-      'no eligible templates found; dynamic templates and serialization extensions are not emulated');
+      'native parser unavailable and no eligible templates were present; fallback is ready but no page templates were processed');
   };
   if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') {
