@@ -121,7 +121,7 @@ const nativeResult = vm.runInContext(
   "wrapped:!!CSSStyleSheet.prototype.insertRule.__s18sWrapped})",
   nativeContext
 );
-if (nativeResult.status !== 'skipped') throw new Error('native viewport support should skip fallback module');
+if (nativeResult.status !== 'native') throw new Error('native viewport support must be classified as native');
 if (nativeObserved.length !== 0) throw new Error('native viewport support must not install document-wide MutationObserver');
 if (nativeResult.wrapped) throw new Error('native viewport support must not patch CSSOM methods');
 
