@@ -15,6 +15,7 @@
   const lifecycle = [];
   const policyViolations = [];
   const crossOriginMessages = [];
+  const recentInteractions = [];
   const pushBounded = (array, value, limit) => {
     array.push(value);
     if (array.length > limit) array.shift();
@@ -97,6 +98,66 @@
     } catch (_) {}
     return snapshot;
   };
+
+  // PayPal page-state snapshot: structural and computed-style metadata only.
+  // Never collect labels, text, form values, credentials, tokens, or account data.
+  const paypalPageSnapshot = () => {
+    const result = {
+      isPayPal: false, readyState: null, viewport: null, typography: null,
+      busyIndicators: 0, disabledControls: 0, forms: 0, frames: 0,
+      visibleDialogs: 0, scripts: [], recentInteractions: recentInteractions.slice(-8)
+    };
+    try {
+      const host = String(location.hostname || '').toLowerCase();
+      result.isPayPal = host === 'paypal.com' || host.endsWith('.paypal.com');
+      if (!result.isPayPal) return result;
+      result.readyState = document.readyState;
+      const viewport = document.querySelector('meta[name="viewport"]');
+      result.viewport = viewport ? String(viewport.getAttribute('content') || '').slice(0, 160) : null;
+      const rootStyle = getComputedStyle(document.documentElement);
+      const bodyStyle = document.body ? getComputedStyle(document.body) : null;
+      result.typography = {
+        rootFontSize: rootStyle.fontSize || null,
+        bodyFontSize: bodyStyle && bodyStyle.fontSize || null,
+        rootTextSizeAdjust: rootStyle.webkitTextSizeAdjust || rootStyle.textSizeAdjust || null,
+        bodyTextSizeAdjust: bodyStyle && (bodyStyle.webkitTextSizeAdjust || bodyStyle.textSizeAdjust) || null,
+        devicePixelRatio: Number.isFinite(devicePixelRatio) ? devicePixelRatio : null
+      };
+      result.busyIndicators = document.querySelectorAll('[aria-busy="true"],[role="progressbar"],.spinner,[class*="spinner"],[class*="loading"]').length;
+      result.disabledControls = document.querySelectorAll('button:disabled,input:disabled,select:disabled,textarea:disabled,[aria-disabled="true"]').length;
+      result.forms = document.forms ? document.forms.length : 0;
+      result.frames = document.querySelectorAll('iframe').length;
+      result.visibleDialogs = Array.from(document.querySelectorAll('[role="dialog"],[role="alertdialog"],dialog')).filter(el => {
+        try { const st = getComputedStyle(el); return !el.hidden && st.display !== 'none' && st.visibility !== 'hidden'; } catch (_) { return false; }
+      }).length;
+      for (const script of Array.from(document.scripts || []).slice(-80)) {
+        if (result.scripts.length >= 20) break;
+        try {
+          const url = new URL(script.src, location.href);
+          if (script.src) result.scripts.push({host:url.host, path:url.pathname});
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return result;
+  };
+
+  // Record only the shape/state of user interactions, never text or form data.
+  if (topFrame && typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('click', event => {
+      const target = event && event.target && event.target.closest ?
+        event.target.closest('button,a,input,[role="button"],[role="link"]') : null;
+      if (!target) return;
+      let rect = null;
+      try { const r = target.getBoundingClientRect(); rect = {width:Math.round(r.width),height:Math.round(r.height)}; } catch (_) {}
+      pushBounded(recentInteractions, {
+        tag:String(target.tagName || '').toLowerCase(),
+        role:target.getAttribute('role') || null,
+        disabled:!!target.disabled || target.getAttribute('aria-disabled') === 'true',
+        visible:!!(rect && rect.width > 0 && rect.height > 0),
+        rect, time:Math.round(performance.now())
+      }, 20);
+    }, true);
+  }
 
   // Collect low-volume, bounded diagnostics only in the top-level page.
   // No resource URLs, query strings, form values, or page text are retained.
@@ -255,6 +316,7 @@
         }, state.capabilities || {}),
         performance: performanceReport(),
         paypalChat: paypalChatSnapshot(),
+        paypalPage: paypalPageSnapshot(),
         resourceLoadErrors: resourceLoadErrors.slice(-20),
         pageLifecycle: lifecycle.slice(-16),
         contentSecurityPolicy: policyViolations.slice(-12),
