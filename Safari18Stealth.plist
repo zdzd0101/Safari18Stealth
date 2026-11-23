@@ -4,10 +4,13 @@
 <dict>
 	<key>Filter</key>
 	<dict>
+		<key>Mode</key>
+		<string>Any</string>
 		<key>Bundles</key>
 		<array>
 			<string>com.apple.mobilesafari</string>
 			<string>com.apple.WebKit.WebContent</string>
+			<string>com.apple.WebKit.Networking</string>
 		</array>
 	</dict>
 </dict>
