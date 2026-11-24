@@ -3,7 +3,6 @@
 #import <WebKit/WebKit.h>
 
 @interface WKWebView (StealthPrivate)
-- (instancetype)_initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration;
 - (void)_setCustomUserAgent:(NSString *)customUserAgent;
 - (NSString *)_customUserAgent;
 @end
@@ -181,17 +180,18 @@ static void EnsureStealthScript(WKUserContentController *ucc) {
 }
 %end
 
-%hook WKWebView
-- (instancetype)_initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
-    WKWebView *wv = %orig;
-    if (wv) {
-        wv.customUserAgent = kStealthUA;
-        wv.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
-        EnsureStealthScript(wv.configuration.userContentController);
+%hook WKWebViewConfiguration
+- (instancetype)init {
+    WKWebViewConfiguration *cfg = %orig;
+    if (cfg) {
+        cfg.preferences.javaScriptCanOpenWindowsAutomatically = YES;
+        EnsureStealthScript(cfg.userContentController);
     }
-    return wv;
+    return cfg;
 }
+%end
 
+%hook WKWebView
 - (instancetype)initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
     WKWebView *wv = %orig;
     if (wv) {
