@@ -1,29 +1,11 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
-#import <objc/runtime.h>
+#import <WebKit/WebKit.h>
 
-@interface StealthWKUserScript : NSObject
-@property (nonatomic, readonly, copy) NSString *source;
-- (instancetype)initWithSource:(NSString *)source injectionTime:(NSInteger)injectionTime forMainFrameOnly:(BOOL)forMainFrameOnly;
-@end
-
-@interface StealthWKUserContentController : NSObject
-@property (nonatomic, readonly, copy) NSArray<StealthWKUserScript *> *userScripts;
-- (void)addUserScript:(StealthWKUserScript *)userScript;
-@end
-
-@interface StealthWKPreferences : NSObject
-@property (nonatomic) BOOL javaScriptCanOpenWindowsAutomatically;
-@end
-
-@interface StealthWKWebViewConfiguration : NSObject
-@property (nonatomic, strong) StealthWKUserContentController *userContentController;
-@property (nonatomic, strong) StealthWKPreferences *preferences;
-@end
-
-@interface StealthWKWebView : UIView
-@property (nonatomic, readonly, copy) StealthWKWebViewConfiguration *configuration;
-@property (nonatomic, copy) NSString *customUserAgent;
+@interface WKWebView (StealthPrivate)
+- (instancetype)_initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration;
+- (void)_setCustomUserAgent:(NSString *)customUserAgent;
+- (NSString *)_customUserAgent;
 @end
 
 static NSString *const kStealthUA = @"Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1";
@@ -157,20 +139,16 @@ static NSString *GetStealthEngineJS(void) {
     return js;
 }
 
-static void EnsureStealthScript(id uccObj) {
-    if (!uccObj) return;
-    StealthWKUserContentController *ucc = (StealthWKUserContentController *)uccObj;
-    for (StealthWKUserScript *s in ucc.userScripts) {
+static void EnsureStealthScript(WKUserContentController *ucc) {
+    if (!ucc) return;
+    for (WKUserScript *s in ucc.userScripts) {
         if ([s.source containsString:@"__wk18_loaded"]) return;
     }
-    Class scriptCls = objc_getClass("WKUserScript");
-    if (scriptCls) {
-        StealthWKUserScript *script = [[scriptCls alloc] initWithSource:GetStealthEngineJS()
-                                                          injectionTime:0
-                                                       forMainFrameOnly:NO];
-        if (script) {
-            [ucc addUserScript:script];
-        }
+    WKUserScript *script = [[WKUserScript alloc] initWithSource:GetStealthEngineJS()
+                                                  injectionTime:WKUserScriptInjectionTimeAtDocumentStart
+                                               forMainFrameOnly:NO];
+    if (script) {
+        [ucc addUserScript:script];
     }
 }
 
@@ -192,44 +170,41 @@ static void EnsureStealthScript(id uccObj) {
 
 %hook WKUserContentController
 - (instancetype)init {
-    id ucc = %orig;
+    WKUserContentController *ucc = %orig;
     EnsureStealthScript(ucc);
     return ucc;
 }
 - (instancetype)initWithCoder:(NSCoder *)coder {
-    id ucc = %orig;
+    WKUserContentController *ucc = %orig;
     EnsureStealthScript(ucc);
     return ucc;
 }
 %end
 
 %hook WKWebView
-- (instancetype)_initWithFrame:(CGRect)frame configuration:(id)configuration {
-    id wv = %orig;
+- (instancetype)_initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
+    WKWebView *wv = %orig;
     if (wv) {
-        StealthWKWebView *swv = (StealthWKWebView *)wv;
-        swv.customUserAgent = kStealthUA;
-        swv.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
-        EnsureStealthScript(swv.configuration.userContentController);
+        wv.customUserAgent = kStealthUA;
+        wv.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
+        EnsureStealthScript(wv.configuration.userContentController);
     }
     return wv;
 }
 
-- (instancetype)initWithFrame:(CGRect)frame configuration:(id)configuration {
-    id wv = %orig;
+- (instancetype)initWithFrame:(CGRect)frame configuration:(WKWebViewConfiguration *)configuration {
+    WKWebView *wv = %orig;
     if (wv) {
-        StealthWKWebView *swv = (StealthWKWebView *)wv;
-        swv.customUserAgent = kStealthUA;
-        swv.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
-        EnsureStealthScript(swv.configuration.userContentController);
+        wv.customUserAgent = kStealthUA;
+        wv.configuration.preferences.javaScriptCanOpenWindowsAutomatically = YES;
+        EnsureStealthScript(wv.configuration.userContentController);
     }
     return wv;
 }
 
-- (id)loadRequest:(NSURLRequest *)request {
-    StealthWKWebView *swv = (StealthWKWebView *)self;
-    swv.customUserAgent = kStealthUA;
-    EnsureStealthScript(swv.configuration.userContentController);
+- (WKNavigation *)loadRequest:(NSURLRequest *)request {
+    self.customUserAgent = kStealthUA;
+    EnsureStealthScript(self.configuration.userContentController);
     if ([request isKindOfClass:[NSMutableURLRequest class]]) {
         [(NSMutableURLRequest *)request setValue:kStealthUA forHTTPHeaderField:@"User-Agent"];
     } else if (request) {
