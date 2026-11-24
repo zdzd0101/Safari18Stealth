@@ -5,20 +5,19 @@
 #import <objc/message.h>
 #import <dlfcn.h>
 
+static NSString *gStealthUA = nil;
+static NSString *gStealthJS = nil;
+
 static NSString *GetStealthUA(void) {
-    static NSString *ua = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        ua = [NSString stringWithUTF8String:"Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1"];
-    });
-    return ua;
+    if (!gStealthUA) {
+        gStealthUA = [NSString stringWithUTF8String:"Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.7 Mobile/15E148 Safari/604.1"];
+    }
+    return gStealthUA;
 }
 
 static NSString *GetStealthEngineJS(void) {
-    static NSString *js = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        js = [NSString stringWithUTF8String:
+    if (!gStealthJS) {
+        gStealthJS = [NSString stringWithUTF8String:
             "(() => {"
             "  'use strict';"
             "  if (window.__wk18_loaded) return;"
@@ -140,8 +139,8 @@ static NSString *GetStealthEngineJS(void) {
             "  }, { once: true });"
             "})();"
         ];
-    });
-    return js;
+    }
+    return gStealthJS;
 }
 
 static void EnsureStealthScript(id ucc) {
@@ -254,6 +253,14 @@ static void hooked_wv_privSetCustomUserAgent(id self, SEL _cmd, NSString *ua) {
     }
 }
 
+static IMP orig_wv_privSetAppName = NULL;
+static void hooked_wv_privSetAppName(id self, SEL _cmd, NSString *appName) {
+    if (orig_wv_privSetAppName) {
+        NSString *verStr = [NSString stringWithUTF8String:"Version/18.7 Mobile/15E148 Safari/604.1"];
+        ((void (*)(id, SEL, NSString *))orig_wv_privSetAppName)(self, _cmd, verStr);
+    }
+}
+
 static IMP orig_wv_customUserAgent = NULL;
 static NSString *hooked_wv_customUserAgent(id self, SEL _cmd) {
     return GetStealthUA();
@@ -289,6 +296,8 @@ static void HookInstanceMethod(Class cls, const char *selName, IMP newImp, IMP *
 
 __attribute__((constructor))
 static void InitSafari18Stealth(void) {
+    GetStealthUA();
+    GetStealthEngineJS();
     dlopen("/System/Library/Frameworks/WebKit.framework/WebKit", RTLD_LAZY);
 
     Class devCls = objc_getClass("UIDevice");
@@ -308,6 +317,7 @@ static void InitSafari18Stealth(void) {
     HookInstanceMethod(wvCls, "loadRequest:", (IMP)hooked_wv_loadRequest, &orig_wv_loadRequest);
     HookInstanceMethod(wvCls, "setCustomUserAgent:", (IMP)hooked_wv_setCustomUserAgent, &orig_wv_setCustomUserAgent);
     HookInstanceMethod(wvCls, "_setCustomUserAgent:", (IMP)hooked_wv_privSetCustomUserAgent, &orig_wv_privSetCustomUserAgent);
+    HookInstanceMethod(wvCls, "_setApplicationNameForUserAgent:", (IMP)hooked_wv_privSetAppName, &orig_wv_privSetAppName);
     HookInstanceMethod(wvCls, "customUserAgent", (IMP)hooked_wv_customUserAgent, &orig_wv_customUserAgent);
     HookInstanceMethod(wvCls, "_customUserAgent", (IMP)hooked_wv_privCustomUserAgent, &orig_wv_privCustomUserAgent);
 
